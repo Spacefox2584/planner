@@ -37,10 +37,6 @@ button {
   box-sizing: border-box;
 }
 
-.square.done {
-  background: #aaffaa;
-}
-
 .progress {
   position: absolute;
   bottom: 0;
@@ -67,25 +63,57 @@ button {
 .modal-content {
   background: #fff;
   padding: 20px;
-  width: 400px;
+  width: 500px;
   border-radius: 8px;
-  max-height: 80vh;   /* cap modal height */
-  overflow-y: auto;   /* scroll if too tall */
+  max-height: 80vh;
+  overflow-y: auto;
 }
 
 #subtasks {
-  max-height: 300px;
-  overflow-y: auto;
-  padding-right: 5px;
+  margin-top: 15px;
 }
 
-#testResults {
-  margin: 10px;
-  padding: 10px;
+.task-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   background: #eee;
-  border: 1px solid #ccc;
-  font-family: monospace;
-  white-space: pre-line;
+  padding: 10px;
+  margin: 5px 0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.task-row:hover {
+  background: #ddd;
+}
+
+.task-row.done {
+  background: #aaffaa;
+  text-decoration: line-through;
+}
+
+.task-delete {
+  margin-left: 10px;
+  font-weight: bold;
+  cursor: pointer;
+  color: #900;
+  display: none;
+}
+
+.task-row:hover .task-delete {
+  display: inline;
+}
+
+.pending-task {
+  background: #f0f8ff;
+  cursor: default;
+}
+
+.pending-task label {
+  flex: 1;
+  cursor: pointer;
 }
 
 .counter {
