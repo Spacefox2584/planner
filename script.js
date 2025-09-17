@@ -10,10 +10,8 @@ const subtasksDiv = document.getElementById("subtasks");
 const addSubtaskBtn = document.getElementById("addSubtask");
 const closeModalBtn = document.getElementById("closeModal");
 
-// Ensure modal is hidden on page load
-window.addEventListener("DOMContentLoaded", () => {
-  modal.classList.add("hidden");
-});
+// --- DEBUG LOGGING ---
+console.log("Planner script loaded");
 
 // Add new project
 addProjectBtn.addEventListener("click", () => {
@@ -21,6 +19,7 @@ addProjectBtn.addEventListener("click", () => {
   if (!name) return;
   const project = { name, subtasks: [], completed: 0 };
   projects.push(project);
+  console.log("Added project:", project);
   renderProjects();
 });
 
@@ -47,20 +46,27 @@ function progressPercent(project) {
 function openProject(index) {
   currentProject = projects[index];
   modalTitle.textContent = currentProject.name;
+  console.log("Opened project:", currentProject.name);
   renderSubtasks();
   modal.classList.remove("hidden");
 }
 
 // Add new subtask
 addSubtaskBtn.addEventListener("click", () => {
+  if (!currentProject) {
+    console.warn("No current project selected!");
+    return;
+  }
   const name = prompt("Subtask name:");
   if (!name) return;
   currentProject.subtasks.push({ name, done: false });
+  console.log("Added subtask:", name);
   renderSubtasks();
 });
 
 // Render subtasks
 function renderSubtasks() {
+  if (!currentProject) return;
   subtasksDiv.innerHTML = "";
   currentProject.completed = 0;
 
@@ -72,6 +78,7 @@ function renderSubtasks() {
 
     square.onclick = () => {
       t.done = !t.done;
+      console.log("Toggled subtask:", t.name, "→", t.done);
       renderSubtasks();
     };
 
@@ -85,4 +92,5 @@ function renderSubtasks() {
 // Close modal
 closeModalBtn.addEventListener("click", () => {
   modal.classList.add("hidden");
+  console.log("Closed modal");
 });
