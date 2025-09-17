@@ -89,6 +89,10 @@ async function onGenerateSubtasks() {
       ? data.subtasks
       : String(data.subtasks || "").split("\n");
 
+    // --- Debugging logs ---
+    console.group("✨ AI Subtask Debug");
+    console.log("Raw subtasks from backend:", lines);
+
     // Clean + limit
     let cleaned = lines
       .map(t => t.replace(/^\s*\d+[\.\)]\s*/, "")) // strip "1." / "1)"
@@ -96,8 +100,13 @@ async function onGenerateSubtasks() {
       .map(t => t.trim())
       .filter(t => t.length > 0);
 
+    console.log("After cleaning:", cleaned);
+
     const total = cleaned.length;
     const tasks = cleaned.slice(0, 8); // hard cap
+    console.log(`Showing ${tasks.length}/${total}`, tasks);
+    console.groupEnd();
+    // --- End debugging logs ---
 
     if (tasks.length === 0) {
       showError("No subtasks returned. Try a more specific project name.");
