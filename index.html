@@ -2,24 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Square Planner</title>
+  <title>Planner v2.0</title>
   <link rel="stylesheet" href="style.css">
+  <!-- SortableJS -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
 <body>
-  <h1>Square Planner</h1>
+  <h1>Planner v2.0</h1>
+  <button id="addGroup">+ Add Group</button>
   <button id="addProject">+ Add Project</button>
-  <button id="runTests">⚡ Run Tests</button>
-  <div id="testResults"></div>
-  <div id="board" class="grid"></div>
+  <div id="whiteboard"></div>
 
-  <!-- Zoom modal -->
+  <!-- Modal for project subtasks -->
   <div id="modal" class="hidden">
     <div class="modal-content">
       <h2 id="modalTitle"></h2>
       <button id="addSubtask">+ Add Subtask</button>
       <button id="generateSubtasks">✨ Generate Example Subtasks</button>
-      <div id="subtasks" class="grid"></div>
+
+      <div id="subtasks"></div>
       <div id="subtaskCounter" class="counter"></div>
+
+      <!-- Approval controls -->
+      <div id="approvalControls" class="hidden">
+        <button id="approveBtn">✅ Approve Selected</button>
+        <button id="cancelBtn">❌ Cancel</button>
+        <button id="selectAllBtn">☑ Select All</button>
+      </div>
+
       <button id="closeModal">⬅ Back</button>
     </div>
   </div>
