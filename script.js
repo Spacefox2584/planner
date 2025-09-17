@@ -63,18 +63,22 @@ addSubtaskBtn.addEventListener("click", () => {
 function renderSubtasks() {
   subtasksDiv.innerHTML = "";
   currentProject.completed = 0;
+
   currentProject.subtasks.forEach((t, i) => {
     const square = document.createElement("div");
     square.className = "square";
-    square.style.background = t.done ? "#aaffaa" : "#ddd";
+    if (t.done) square.classList.add("done");
     square.innerHTML = t.name;
+
     square.onclick = () => {
       t.done = !t.done;
       renderSubtasks();
     };
+
     subtasksDiv.appendChild(square);
     if (t.done) currentProject.completed++;
   });
+
   renderProjects();
 }
 
