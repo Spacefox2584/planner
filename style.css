@@ -79,3 +79,9 @@ button {
   font-family: monospace;
   white-space: pre-line;
 }
+#subtasks {
+  max-height: 300px;   /* limit height */
+  overflow-y: auto;    /* scroll if too many */
+  padding-right: 5px;  /* avoid scrollbar overlap */
+}
+
