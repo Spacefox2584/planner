@@ -12,6 +12,7 @@ const subtasksDiv = document.getElementById("subtasks");
 const addSubtaskBtn = document.getElementById("addSubtask");
 const generateSubtasksBtn = document.getElementById("generateSubtasks");
 const closeModalBtn = document.getElementById("closeModal");
+const subtaskCounter = document.getElementById("subtaskCounter");
 
 // Ensure modal is hidden on page load
 window.addEventListener("DOMContentLoaded", () => {
@@ -75,14 +76,24 @@ generateSubtasksBtn.addEventListener("click", async () => {
   const data = await res.json();
   console.log("AI suggested subtasks:", data);
 
-  data.subtasks.forEach(task => {
-    currentProject.subtasks.push({
-      name: task.replace(/^\d+\.\s*/, ""), // strip numbers
-      done: false
-    });
+  // Clean and limit output
+  let cleaned = data.subtasks
+    .map(t => t.replace(/^\d+[\.\)]\s*/, "")) // strip "1." / "1)"
+    .map(t => t.replace(/^[-*]\s*/, ""))      // strip "-" / "*"
+    .map(t => t.trim())
+    .filter(t => t.length > 0);
+
+  const total = cleaned.length;
+  const tasks = cleaned.slice(0, 8); // cap at 8
+
+  tasks.forEach(task => {
+    currentProject.subtasks.push({ name: task, done: false });
   });
 
   renderSubtasks();
+
+  // Show counter
+  subtaskCounter.textContent = `${tasks.length}/${total} subtasks shown`;
 });
 
 // Render subtasks
@@ -107,6 +118,9 @@ function renderSubtasks() {
   });
 
   renderProjects();
+
+  // Reset counter when manually editing
+  subtaskCounter.textContent = "";
 }
 
 // Close modal
