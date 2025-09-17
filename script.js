@@ -10,6 +10,7 @@ const modal = document.getElementById("modal");
 const modalTitle = document.getElementById("modalTitle");
 const subtasksDiv = document.getElementById("subtasks");
 const addSubtaskBtn = document.getElementById("addSubtask");
+const generateSubtasksBtn = document.getElementById("generateSubtasks");
 const closeModalBtn = document.getElementById("closeModal");
 
 // Ensure modal is hidden on page load
@@ -53,12 +54,34 @@ function openProject(index) {
   modal.classList.remove("hidden");
 }
 
-// Add new subtask
+// Add new subtask manually
 addSubtaskBtn.addEventListener("click", () => {
   if (!currentProject) return;
   const name = prompt("Subtask name:");
   if (!name) return;
   currentProject.subtasks.push({ name, done: false });
+  renderSubtasks();
+});
+
+// Generate subtasks with AI
+generateSubtasksBtn.addEventListener("click", async () => {
+  if (!currentProject) return;
+
+  const res = await fetch("/api/suggest", {
+    method: "POST",
+    body: JSON.stringify({ projectName: currentProject.name })
+  });
+
+  const data = await res.json();
+  console.log("AI suggested subtasks:", data);
+
+  data.subtasks.forEach(task => {
+    currentProject.subtasks.push({
+      name: task.replace(/^\d+\.\s*/, ""), // strip numbers
+      done: false
+    });
+  });
+
   renderSubtasks();
 });
 
@@ -114,17 +137,16 @@ function runTests() {
   renderSubtasks();
   report += currentProject.completed === 1 ? "✅ Progress updates\n" : "❌ Progress failed\n";
 
-  // Done
   report += "=== Tests complete ===";
   console.log(report);
   testResultsDiv.textContent = report;
 
-  // Reset state (so test data doesn’t pollute)
+  // Reset state
   projects = [];
   currentProject = null;
   renderProjects();
   subtasksDiv.innerHTML = "";
 }
 
-// Bind button
+// Bind test button
 runTestsBtn.addEventListener("click", runTests);
