@@ -1,183 +1,126 @@
-// --- State ---
+let groups = [];
 let projects = [];
 let currentProject = null;
 let pendingSubtasks = [];
 
-// --- DOM refs ---
-let board, addProjectBtn, runTestsBtn, testResultsDiv;
-let modal, modalTitle, subtasksDiv, addSubtaskBtn, generateSubtasksBtn, closeModalBtn, subtaskCounter;
+// DOM refs
+let whiteboard, modal, modalTitle, subtasksDiv, subtaskCounter;
+let addGroupBtn, addProjectBtn, addSubtaskBtn, generateSubtasksBtn, closeModalBtn;
 let approveBtn, cancelBtn, selectAllBtn;
 
 window.addEventListener("DOMContentLoaded", () => {
-  board = document.getElementById("board");
-  addProjectBtn = document.getElementById("addProject");
-  runTestsBtn = document.getElementById("runTests");
-  testResultsDiv = document.getElementById("testResults");
-
+  whiteboard = document.getElementById("whiteboard");
   modal = document.getElementById("modal");
   modalTitle = document.getElementById("modalTitle");
   subtasksDiv = document.getElementById("subtasks");
+  subtaskCounter = document.getElementById("subtaskCounter");
+
+  addGroupBtn = document.getElementById("addGroup");
+  addProjectBtn = document.getElementById("addProject");
   addSubtaskBtn = document.getElementById("addSubtask");
   generateSubtasksBtn = document.getElementById("generateSubtasks");
   closeModalBtn = document.getElementById("closeModal");
-  subtaskCounter = document.getElementById("subtaskCounter");
 
-  // Extra buttons for approval
-  approveBtn = document.createElement("button");
-  approveBtn.textContent = "✅ Approve Selected";
-  approveBtn.classList.add("hidden");
-
-  cancelBtn = document.createElement("button");
-  cancelBtn.textContent = "❌ Cancel";
-  cancelBtn.classList.add("hidden");
-
-  selectAllBtn = document.createElement("button");
-  selectAllBtn.textContent = "☑ Select All";
-  selectAllBtn.classList.add("hidden");
-
-  subtasksDiv.parentNode.insertBefore(approveBtn, subtaskCounter);
-  subtasksDiv.parentNode.insertBefore(cancelBtn, subtaskCounter);
-  subtasksDiv.parentNode.insertBefore(selectAllBtn, subtaskCounter);
+  approveBtn = document.getElementById("approveBtn");
+  cancelBtn = document.getElementById("cancelBtn");
+  selectAllBtn = document.getElementById("selectAllBtn");
 
   modal.classList.add("hidden");
 
+  addGroupBtn.addEventListener("click", onAddGroup);
   addProjectBtn.addEventListener("click", onAddProject);
   addSubtaskBtn.addEventListener("click", onAddSubtask);
-  closeModalBtn.addEventListener("click", () => modal.classList.add("hidden"));
-  runTestsBtn.addEventListener("click", runTests);
   generateSubtasksBtn.addEventListener("click", onGenerateSubtasks);
+  closeModalBtn.addEventListener("click", () => modal.classList.add("hidden"));
   approveBtn.addEventListener("click", approvePendingSubtasks);
   cancelBtn.addEventListener("click", cancelPendingSubtasks);
   selectAllBtn.addEventListener("click", toggleSelectAll);
 
-  document.addEventListener("keydown", (e) => {
-    if (!pendingSubtasks.length) return;
-    if (e.key === "Enter") toggleSelectAll();
-    if (e.key === "Escape") cancelPendingSubtasks();
-  });
+  // Init with one group
+  groups.push({ name: "Top Priority", id: Date.now() });
+  renderGroups();
 });
 
-// --- Helpers ---
-function setGenerateLoading(isLoading) {
-  generateSubtasksBtn.disabled = isLoading;
-  generateSubtasksBtn.textContent = isLoading ? "… Generating" : "✨ Generate Example Subtasks";
-}
-function showError(msg) {
-  console.error("[Planner Error]", msg);
-  alert(msg);
+// Groups
+function onAddGroup() {
+  const name = prompt("Group name:");
+  if (!name) return;
+  groups.push({ name, id: Date.now() });
+  renderGroups();
 }
 
-// --- Project actions ---
-function onAddProject() {
-  const name = prompt("Project name:");
-  if (!name) return;
-  projects.push({ name, subtasks: [], completed: 0 });
+function renderGroups() {
+  whiteboard.innerHTML = "";
+  groups.forEach(group => {
+    const g = document.createElement("div");
+    g.className = "group";
+    g.innerHTML = `<h3>${escapeHtml(group.name)}</h3>
+      <div id="group-${group.id}" class="project-list"></div>`;
+    whiteboard.appendChild(g);
+
+    const listEl = g.querySelector(".project-list");
+    Sortable.create(listEl, {
+      group: "projects",
+      animation: 150,
+      onEnd: () => {
+        // could update state later
+      }
+    });
+  });
   renderProjects();
 }
-function onAddSubtask() {
-  if (!currentProject) return;
-  const name = prompt("Subtask name:");
-  if (!name) return;
-  currentProject.subtasks.push({ name, done: false });
-  renderSubtasks();
-}
 
-// --- AI flow ---
-async function onGenerateSubtasks() {
-  if (!currentProject) return;
-  setGenerateLoading(true);
-  try {
-    const res = await fetch("/api/suggest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectName: currentProject.name })
-    });
-    const data = await res.json();
-    if (!res.ok || data?.error) throw new Error(data?.error || "Server error");
-
-    let lines = Array.isArray(data.subtasks) ? data.subtasks : String(data.subtasks || "").split("\n");
-
-    // Debug
-    console.group("✨ AI Subtask Debug");
-    console.log("Raw:", lines);
-
-    let cleaned = lines
-      .map(t => t.replace(/^\s*\d+[\.\)]\s*/, "").replace(/^\s*[-*]\s*/, "").trim())
-      .filter(t => t && !/^sure|here are|of course/i.test(t));
-
-    console.log("Cleaned:", cleaned);
-    const total = cleaned.length;
-    pendingSubtasks = cleaned.slice(0, 20); // keep up to 20 for approval
-    console.log(`Pending ${pendingSubtasks.length}/${total}`);
-    console.groupEnd();
-
-    renderPendingSubtasks();
-  } catch (err) {
-    showError(`Generate failed: ${err.message}`);
-  } finally {
-    setGenerateLoading(false);
+// Projects
+function onAddProject() {
+  if (!groups.length) {
+    alert("Add a group first!");
+    return;
   }
+  const name = prompt("Project name:");
+  if (!name) return;
+  projects.push({ name, id: Date.now(), subtasks: [], completed: 0, groupId: groups[0].id });
+  renderProjects();
 }
 
-function renderPendingSubtasks() {
-  subtasksDiv.innerHTML = "";
-  subtaskCounter.textContent = "";
-  pendingSubtasks.forEach((task, i) => {
-    const row = document.createElement("div");
-    row.className = "task-row pending-task";
-    row.innerHTML = `<label><input type="checkbox" data-index="${i}"> ${escapeHtml(task)}</label>`;
-    subtasksDiv.appendChild(row);
-  });
-  approveBtn.classList.remove("hidden");
-  cancelBtn.classList.remove("hidden");
-  selectAllBtn.classList.remove("hidden");
-}
-
-function approvePendingSubtasks() {
-  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
-  checkboxes.forEach(cb => {
-    if (cb.checked) currentProject.subtasks.push({ name: pendingSubtasks[cb.dataset.index], done: false });
-  });
-  pendingSubtasks = [];
-  hideApprovalControls();
-  renderSubtasks();
-}
-function cancelPendingSubtasks() {
-  pendingSubtasks = [];
-  hideApprovalControls();
-  renderSubtasks();
-}
-function toggleSelectAll() {
-  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
-  const allChecked = [...checkboxes].every(cb => cb.checked);
-  checkboxes.forEach(cb => cb.checked = !allChecked);
-  selectAllBtn.textContent = allChecked ? "☑ Select All" : "☐ Deselect All";
-}
-function hideApprovalControls() {
-  approveBtn.classList.add("hidden");
-  cancelBtn.classList.add("hidden");
-  selectAllBtn.classList.add("hidden");
-}
-
-// --- Rendering ---
 function renderProjects() {
-  board.innerHTML = "";
-  projects.forEach((p, i) => {
-    const square = document.createElement("div");
-    square.className = "square";
-    square.innerHTML = `<strong>${escapeHtml(p.name)}</strong>
-      <div>${p.completed}/${p.subtasks.length}</div>
-      <div class="progress" style="width:${progressPercent(p)}%"></div>`;
-    square.onclick = () => openProject(i);
-    board.appendChild(square);
+  projects.forEach(p => {
+    const container = document.getElementById(`group-${p.groupId}`);
+    if (!container) return;
+    let existing = document.getElementById(`project-${p.id}`);
+    if (!existing) {
+      const div = document.createElement("div");
+      div.className = "project";
+      div.id = `project-${p.id}`;
+      div.innerHTML = `
+        <strong>${escapeHtml(p.name)}</strong>
+        <div class="progress" style="width:${progressPercent(p)}%"></div>
+        <div class="percent">${Math.round(progressPercent(p))}%</div>
+      `;
+      div.onclick = () => openProject(p.id);
+      container.appendChild(div);
+    } else {
+      existing.querySelector(".progress").style.width = `${progressPercent(p)}%`;
+      existing.querySelector(".percent").textContent = `${Math.round(progressPercent(p))}%`;
+    }
   });
 }
-function openProject(i) {
-  currentProject = projects[i];
+
+// Modal + Subtasks
+function openProject(id) {
+  currentProject = projects.find(p => p.id === id);
   modalTitle.textContent = currentProject.name;
   renderSubtasks();
   modal.classList.remove("hidden");
 }
+
+function onAddSubtask() {
+  if (!currentProject) return;
+  const name = prompt("Subtask name:");
+  if (!name) return;
+  currentProject.subtasks.push({ name, done: false, notes: "" });
+  renderSubtasks();
+}
+
 function renderSubtasks() {
   if (!currentProject) return;
   subtasksDiv.innerHTML = "";
@@ -202,6 +145,17 @@ function renderSubtasks() {
 
     row.appendChild(span);
 
+    const notesBtn = document.createElement("button");
+    notesBtn.textContent = "📝";
+    notesBtn.onclick = (e) => {
+      e.stopPropagation();
+      const note = prompt("Notes:", t.notes || "");
+      if (note !== null) {
+        t.notes = note;
+      }
+    };
+    row.appendChild(notesBtn);
+
     const del = document.createElement("span");
     del.textContent = "×";
     del.className = "delete-btn";
@@ -222,41 +176,26 @@ function renderSubtasks() {
   });
   renderProjects();
 }
+
 function progressPercent(project) {
   return project.subtasks.length ? (project.completed / project.subtasks.length) * 100 : 0;
 }
+
+// AI Stub
+async function onGenerateSubtasks() {
+  if (!currentProject) return;
+  alert("AI generation stubbed. Hook into /api/suggest for real output.");
+}
+
+// Approval
+function renderPendingSubtasks() {}
+function approvePendingSubtasks() {}
+function cancelPendingSubtasks() {}
+function toggleSelectAll() {}
+
+// Helpers
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, s => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[s]));
-}
-
-// --- Tests ---
-function runTests() {
-  let report = "=== Running Planner Tests ===\n";
-  projects = [];
-  renderProjects();
-
-  projects.push({ name: "Test Project", subtasks: [], completed: 0 });
-  report += projects.length === 1 ? "✅ Project added\n" : "❌ Project add failed\n";
-
-  currentProject = projects[0];
-  currentProject.subtasks.push({ name: "Subtask A", done: false });
-  currentProject.subtasks.push({ name: "Subtask B", done: false });
-  report += currentProject.subtasks.length === 2 ? "✅ Subtasks added\n" : "❌ Subtasks add failed\n";
-
-  currentProject.subtasks[0].done = true;
-  renderSubtasks();
-  report += currentProject.completed === 1 ? "✅ Progress updates\n" : "❌ Progress failed\n";
-
-  const fakeAI = ["1. Setup hosting","2. Build homepage","Sure! Here are tasks","3. Test checkout"];
-  const cleaned = fakeAI.filter(t => !/^sure|here are/i.test(t));
-  const capped = cleaned.slice(0, 8);
-  report += (capped.length === 3) ? "✅ Fake AI filter/cap works\n" : "❌ Fake AI failed\n";
-
-  report += "=== Tests complete ===";
-  console.log(report);
-  testResultsDiv.textContent = report;
-  projects = [];
-  currentProject = null;
 }
