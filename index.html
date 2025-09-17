@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Planner</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Square Planner</h1>
+  <button id="addProject">+ Add Project</button>
+  <div id="board" class="grid"></div>
+
+  <!-- Zoom modal -->
+  <div id="modal" class="hidden">
+    <div class="modal-content">
+      <h2 id="modalTitle"></h2>
+      <button id="addSubtask">+ Add Subtask</button>
+      <div id="subtasks" class="grid"></div>
+      <button id="closeModal">⬅ Back</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
