@@ -4,14 +4,18 @@ let currentProject = null;
 // Elements
 const board = document.getElementById("board");
 const addProjectBtn = document.getElementById("addProject");
+const runTestsBtn = document.getElementById("runTests");
+const testResultsDiv = document.getElementById("testResults");
 const modal = document.getElementById("modal");
 const modalTitle = document.getElementById("modalTitle");
 const subtasksDiv = document.getElementById("subtasks");
 const addSubtaskBtn = document.getElementById("addSubtask");
 const closeModalBtn = document.getElementById("closeModal");
 
-// --- DEBUG LOGGING ---
-console.log("Planner script loaded");
+// Ensure modal is hidden on page load
+window.addEventListener("DOMContentLoaded", () => {
+  modal.classList.add("hidden");
+});
 
 // Add new project
 addProjectBtn.addEventListener("click", () => {
@@ -19,7 +23,6 @@ addProjectBtn.addEventListener("click", () => {
   if (!name) return;
   const project = { name, subtasks: [], completed: 0 };
   projects.push(project);
-  console.log("Added project:", project);
   renderProjects();
 });
 
@@ -46,21 +49,16 @@ function progressPercent(project) {
 function openProject(index) {
   currentProject = projects[index];
   modalTitle.textContent = currentProject.name;
-  console.log("Opened project:", currentProject.name);
   renderSubtasks();
   modal.classList.remove("hidden");
 }
 
 // Add new subtask
 addSubtaskBtn.addEventListener("click", () => {
-  if (!currentProject) {
-    console.warn("No current project selected!");
-    return;
-  }
+  if (!currentProject) return;
   const name = prompt("Subtask name:");
   if (!name) return;
   currentProject.subtasks.push({ name, done: false });
-  console.log("Added subtask:", name);
   renderSubtasks();
 });
 
@@ -70,7 +68,7 @@ function renderSubtasks() {
   subtasksDiv.innerHTML = "";
   currentProject.completed = 0;
 
-  currentProject.subtasks.forEach((t, i) => {
+  currentProject.subtasks.forEach((t) => {
     const square = document.createElement("div");
     square.className = "square";
     if (t.done) square.classList.add("done");
@@ -78,7 +76,6 @@ function renderSubtasks() {
 
     square.onclick = () => {
       t.done = !t.done;
-      console.log("Toggled subtask:", t.name, "→", t.done);
       renderSubtasks();
     };
 
@@ -92,5 +89,42 @@ function renderSubtasks() {
 // Close modal
 closeModalBtn.addEventListener("click", () => {
   modal.classList.add("hidden");
-  console.log("Closed modal");
 });
+
+// === TEST SUITE ===
+function runTests() {
+  let report = "=== Running Planner Tests ===\n";
+  projects = [];
+  renderProjects();
+
+  // Add project
+  projects.push({ name: "Test Project", subtasks: [], completed: 0 });
+  renderProjects();
+  report += projects.length === 1 ? "✅ Project added\n" : "❌ Project add failed\n";
+
+  // Add subtasks
+  currentProject = projects[0];
+  currentProject.subtasks.push({ name: "Subtask A", done: false });
+  currentProject.subtasks.push({ name: "Subtask B", done: false });
+  renderSubtasks();
+  report += currentProject.subtasks.length === 2 ? "✅ Subtasks added\n" : "❌ Subtasks add failed\n";
+
+  // Toggle
+  currentProject.subtasks[0].done = true;
+  renderSubtasks();
+  report += currentProject.completed === 1 ? "✅ Progress updates\n" : "❌ Progress failed\n";
+
+  // Done
+  report += "=== Tests complete ===";
+  console.log(report);
+  testResultsDiv.textContent = report;
+
+  // Reset state (so test data doesn’t pollute)
+  projects = [];
+  currentProject = null;
+  renderProjects();
+  subtasksDiv.innerHTML = "";
+}
+
+// Bind button
+runTestsBtn.addEventListener("click", runTests);
