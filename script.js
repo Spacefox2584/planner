@@ -181,17 +181,88 @@ function progressPercent(project) {
   return project.subtasks.length ? (project.completed / project.subtasks.length) * 100 : 0;
 }
 
-// AI Stub
+// AI Subtasks
 async function onGenerateSubtasks() {
   if (!currentProject) return;
-  alert("AI generation stubbed. Hook into /api/suggest for real output.");
+  generateSubtasksBtn.disabled = true;
+  generateSubtasksBtn.textContent = "… Generating";
+  try {
+    const res = await fetch("/api/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectName: currentProject.name })
+    });
+    const data = await res.json();
+    if (!res.ok || data?.error) throw new Error(data?.error || "Server error");
+
+    let lines = Array.isArray(data.subtasks) ? data.subtasks : String(data.subtasks || "").split("\n");
+
+    let cleaned = lines
+      .map(t => t.replace(/^\s*\d+[\.\)]\s*/, "").replace(/^\s*[-*]\s*/, "").trim())
+      .filter(t => t && !/^sure|here are|of course/i.test(t));
+
+    pendingSubtasks = cleaned.slice(0, 20); // cap at 20
+    renderPendingSubtasks();
+  } catch (err) {
+    alert(`Generate failed: ${err.message}`);
+  } finally {
+    generateSubtasksBtn.disabled = false;
+    generateSubtasksBtn.textContent = "✨ Generate Example Subtasks";
+  }
 }
 
-// Approval
-function renderPendingSubtasks() {}
-function approvePendingSubtasks() {}
-function cancelPendingSubtasks() {}
-function toggleSelectAll() {}
+function renderPendingSubtasks() {
+  subtasksDiv.innerHTML = "";
+  subtaskCounter.textContent = `${pendingSubtasks.length} suggestions`;
+  pendingSubtasks.forEach((task, i) => {
+    const row = document.createElement("div");
+    row.className = "task-row pending-task";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.dataset.index = i;
+
+    const label = document.createElement("span");
+    label.textContent = task;
+
+    row.appendChild(cb);
+    row.appendChild(label);
+
+    // Whole row clickable
+    row.onclick = (e) => {
+      if (e.target.tagName !== "INPUT") cb.checked = !cb.checked;
+    };
+
+    subtasksDiv.appendChild(row);
+  });
+
+  document.getElementById("approvalControls").classList.remove("hidden");
+}
+
+function approvePendingSubtasks() {
+  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
+  checkboxes.forEach(cb => {
+    if (cb.checked) {
+      currentProject.subtasks.push({ name: pendingSubtasks[cb.dataset.index], done: false, notes: "" });
+    }
+  });
+  pendingSubtasks = [];
+  document.getElementById("approvalControls").classList.add("hidden");
+  renderSubtasks();
+}
+
+function cancelPendingSubtasks() {
+  pendingSubtasks = [];
+  document.getElementById("approvalControls").classList.add("hidden");
+  renderSubtasks();
+}
+
+function toggleSelectAll() {
+  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
+  const allChecked = [...checkboxes].every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+  selectAllBtn.textContent = allChecked ? "☑ Select All" : "☐ Deselect All";
+}
 
 // Helpers
 function escapeHtml(str) {
