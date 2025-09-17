@@ -2,7 +2,7 @@
 let projects = [];
 let currentProject = null;
 
-// --- DOM refs (filled on DOMContentLoaded) ---
+// --- DOM refs ---
 let board, addProjectBtn, runTestsBtn, testResultsDiv;
 let modal, modalTitle, subtasksDiv, addSubtaskBtn, generateSubtasksBtn, closeModalBtn, subtaskCounter;
 
@@ -59,8 +59,7 @@ function onAddSubtask() {
   if (!name) return;
   currentProject.subtasks.push({ name, done: false });
   renderSubtasks();
-  // Manual edit: counter no longer represents an AI run
-  if (subtaskCounter) subtaskCounter.textContent = "";
+  if (subtaskCounter) subtaskCounter.textContent = ""; // reset counter if manual
 }
 
 async function onGenerateSubtasks() {
@@ -74,7 +73,6 @@ async function onGenerateSubtasks() {
       body: JSON.stringify({ projectName: currentProject.name })
     });
 
-    // Backend might send { error: "..." } with 200 or non-200
     let data;
     try {
       data = await res.json();
@@ -86,20 +84,20 @@ async function onGenerateSubtasks() {
       throw new Error(data?.error || `Server error (status ${res.status})`);
     }
 
-    // Accept array or string fallback
+    // Handle array or string
     let lines = Array.isArray(data.subtasks)
       ? data.subtasks
       : String(data.subtasks || "").split("\n");
 
-    // Clean & limit
+    // Clean + limit
     let cleaned = lines
-      .map(t => t.replace(/^\s*\d+[\.\)]\s*/, "")) // "1." / "1)"
-      .map(t => t.replace(/^\s*[-*]\s*/, ""))      // "-" / "*"
+      .map(t => t.replace(/^\s*\d+[\.\)]\s*/, "")) // strip "1." / "1)"
+      .map(t => t.replace(/^\s*[-*]\s*/, ""))      // strip "-" / "*"
       .map(t => t.trim())
       .filter(t => t.length > 0);
 
     const total = cleaned.length;
-    const tasks = cleaned.slice(0, 8); // strict cap
+    const tasks = cleaned.slice(0, 8); // hard cap
 
     if (tasks.length === 0) {
       showError("No subtasks returned. Try a more specific project name.");
@@ -109,7 +107,6 @@ async function onGenerateSubtasks() {
     tasks.forEach(task => currentProject.subtasks.push({ name: task, done: false }));
 
     renderSubtasks();
-    // Only show counter for AI runs
     if (subtaskCounter) {
       subtaskCounter.textContent = total > tasks.length
         ? `${tasks.length}/${total} subtasks shown`
@@ -141,7 +138,6 @@ function openProject(index) {
   currentProject = projects[index];
   modalTitle.textContent = currentProject.name;
   renderSubtasks();
-  // Reset AI counter on open (fresh context)
   if (subtaskCounter) subtaskCounter.textContent = "";
   modal.classList.remove("hidden");
 }
@@ -159,7 +155,6 @@ function renderSubtasks() {
     square.onclick = () => {
       t.done = !t.done;
       renderSubtasks();
-      // Manual toggles keep the counter as-is (it reflects the last AI run size)
     };
     subtasksDiv.appendChild(square);
     if (t.done) currentProject.completed++;
@@ -186,19 +181,16 @@ function runTests() {
   projects = [];
   renderProjects();
 
-  // Add project
   projects.push({ name: "Test Project", subtasks: [], completed: 0 });
   renderProjects();
   report += projects.length === 1 ? "✅ Project added\n" : "❌ Project add failed\n";
 
-  // Add subtasks
   currentProject = projects[0];
   currentProject.subtasks.push({ name: "Subtask A", done: false });
   currentProject.subtasks.push({ name: "Subtask B", done: false });
   renderSubtasks();
   report += currentProject.subtasks.length === 2 ? "✅ Subtasks added\n" : "❌ Subtasks add failed\n";
 
-  // Toggle
   currentProject.subtasks[0].done = true;
   renderSubtasks();
   report += currentProject.completed === 1 ? "✅ Progress updates\n" : "❌ Progress failed\n";
@@ -207,7 +199,6 @@ function runTests() {
   console.log(report);
   if (testResultsDiv) testResultsDiv.textContent = report;
 
-  // Reset state
   projects = [];
   currentProject = null;
   renderProjects();
