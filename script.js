@@ -10,6 +10,11 @@ const subtasksDiv = document.getElementById("subtasks");
 const addSubtaskBtn = document.getElementById("addSubtask");
 const closeModalBtn = document.getElementById("closeModal");
 
+// Ensure modal is hidden on page load
+window.addEventListener("DOMContentLoaded", () => {
+  modal.classList.add("hidden");
+});
+
 // Add new project
 addProjectBtn.addEventListener("click", () => {
   const name = prompt("Project name:");
