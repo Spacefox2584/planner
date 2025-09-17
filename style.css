@@ -32,6 +32,13 @@ button {
   cursor: pointer;
   position: relative;
   border-radius: 6px;
+  text-align: center;
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.square.done {
+  background: #aaffaa;
 }
 
 .progress {
