@@ -31,6 +31,7 @@ button {
   flex-direction: column;
   cursor: pointer;
   position: relative;
+  border-radius: 6px;
 }
 
 .progress {
