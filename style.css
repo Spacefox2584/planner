@@ -14,46 +14,59 @@ button {
   cursor: pointer;
 }
 
-.grid {
+#whiteboard {
   display: flex;
+  gap: 20px;
+  align-items: flex-start;
   flex-wrap: wrap;
-  gap: 10px;
   margin-top: 20px;
 }
 
-/* Project squares */
-.square {
-  width: 150px;
-  height: 150px;
-  background: #ddd;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  cursor: pointer;
-  position: relative;
-  border-radius: 6px;
-  text-align: center;
+/* Group headings */
+.group {
+  background: #fff;
   padding: 10px;
-  box-sizing: border-box;
-  transition: background 0.2s;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  min-width: 250px;
+  flex: 1;
 }
 
-.square:hover {
-  background: #ccc;
+.group h3 {
+  text-align: center;
+  margin: 0 0 10px 0;
 }
 
-.progress {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  height: 10px;
+/* Project stickies */
+.project {
+  background: #fffa9c;
+  border-radius: 8px;
+  padding: 10px;
+  margin: 10px 0;
+  cursor: grab;
+  position: relative;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  transition: transform 0.2s, background 0.3s;
+}
+
+.project:hover {
+  transform: scale(1.03);
+}
+
+.project .progress {
+  height: 8px;
   background: green;
+  border-radius: 4px;
+  margin-top: 8px;
   width: 0%;
 }
 
-.hidden {
-  display: none !important;
+.project .percent {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  font-size: 12px;
+  color: #333;
 }
 
 /* Modal */
@@ -76,7 +89,7 @@ button {
   overflow-y: auto;
 }
 
-/* Subtask rectangles */
+/* Subtasks */
 .task-row {
   display: flex;
   align-items: center;
@@ -100,7 +113,6 @@ button {
   color: #555;
 }
 
-/* Delete button */
 .delete-btn {
   margin-left: 12px;
   font-weight: bold;
@@ -113,7 +125,6 @@ button {
   display: inline;
 }
 
-/* Editable text */
 .task-text {
   flex: 1;
 }
@@ -136,12 +147,6 @@ button {
   text-align: right;
 }
 
-/* Test results */
-#testResults {
-  margin: 10px;
-  padding: 10px;
-  background: #eee;
-  border: 1px solid #ccc;
-  font-family: monospace;
-  white-space: pre-line;
+.hidden {
+  display: none !important;
 }
