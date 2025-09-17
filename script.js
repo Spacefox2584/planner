@@ -46,6 +46,7 @@ function openProject(index) {
   modal.classList.remove("hidden");
 }
 
+// Add new subtask
 addSubtaskBtn.addEventListener("click", () => {
   const name = prompt("Subtask name:");
   if (!name) return;
@@ -53,6 +54,7 @@ addSubtaskBtn.addEventListener("click", () => {
   renderSubtasks();
 });
 
+// Render subtasks
 function renderSubtasks() {
   subtasksDiv.innerHTML = "";
   currentProject.completed = 0;
@@ -71,6 +73,7 @@ function renderSubtasks() {
   renderProjects();
 }
 
+// Close modal
 closeModalBtn.addEventListener("click", () => {
   modal.classList.add("hidden");
 });
