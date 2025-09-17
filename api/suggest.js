@@ -10,19 +10,25 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Body parsing (in case Vercel didn’t parse automatically)
-    const buffers = [];
-    for await (const chunk of req) {
-      buffers.push(chunk);
+    // ✅ Manually parse request body (Vercel quirk fix)
+    let body = {};
+    try {
+      const buffers = [];
+      for await (const chunk of req) {
+        buffers.push(chunk);
+      }
+      const data = Buffer.concat(buffers).toString();
+      body = data ? JSON.parse(data) : {};
+    } catch (parseErr) {
+      return res.status(400).json({ error: "Invalid JSON body" });
     }
-    const data = Buffer.concat(buffers).toString();
-    const body = data ? JSON.parse(data) : {};
-    const { projectName } = body;
 
+    const { projectName } = body;
     if (!projectName) {
       return res.status(400).json({ error: "Missing project name" });
     }
 
+    // ✅ Call OpenAI
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -41,6 +47,7 @@ export default async function handler(req, res) {
 
     const text = response.choices[0]?.message?.content || "";
 
+    // ✅ Clean output into array
     let tasks = text.split("\n").map(t =>
       t
         .replace(/^\s*\d+[\.\)]\s*/, "")
@@ -53,8 +60,10 @@ export default async function handler(req, res) {
     return res.status(200).json({ subtasks: tasks });
   } catch (err) {
     console.error("API error:", err);
-    return res
-      .status(500)
-      .json({ error: "Failed to generate subtasks", details: err.message });
+    // ✅ Always return JSON, never HTML
+    return res.status(500).json({
+      error: "Failed to generate subtasks",
+      details: err.message || "Unknown error"
+    });
   }
 }
