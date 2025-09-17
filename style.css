@@ -69,6 +69,14 @@ button {
   padding: 20px;
   width: 400px;
   border-radius: 8px;
+  max-height: 80vh;   /* cap modal height */
+  overflow-y: auto;   /* scroll if too tall */
+}
+
+#subtasks {
+  max-height: 300px;
+  overflow-y: auto;
+  padding-right: 5px;
 }
 
 #testResults {
@@ -79,9 +87,10 @@ button {
   font-family: monospace;
   white-space: pre-line;
 }
-#subtasks {
-  max-height: 300px;   /* limit height */
-  overflow-y: auto;    /* scroll if too many */
-  padding-right: 5px;  /* avoid scrollbar overlap */
-}
 
+.counter {
+  margin-top: 5px;
+  font-size: 12px;
+  color: #555;
+  text-align: right;
+}
