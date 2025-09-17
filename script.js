@@ -1,40 +1,135 @@
+// --- State ---
 let projects = [];
 let currentProject = null;
 
-// Elements
-const board = document.getElementById("board");
-const addProjectBtn = document.getElementById("addProject");
-const runTestsBtn = document.getElementById("runTests");
-const testResultsDiv = document.getElementById("testResults");
-const modal = document.getElementById("modal");
-const modalTitle = document.getElementById("modalTitle");
-const subtasksDiv = document.getElementById("subtasks");
-const addSubtaskBtn = document.getElementById("addSubtask");
-const generateSubtasksBtn = document.getElementById("generateSubtasks");
-const closeModalBtn = document.getElementById("closeModal");
-const subtaskCounter = document.getElementById("subtaskCounter");
+// --- DOM refs (filled on DOMContentLoaded) ---
+let board, addProjectBtn, runTestsBtn, testResultsDiv;
+let modal, modalTitle, subtasksDiv, addSubtaskBtn, generateSubtasksBtn, closeModalBtn, subtaskCounter;
 
-// Ensure modal is hidden on page load
 window.addEventListener("DOMContentLoaded", () => {
+  // Grab elements
+  board = document.getElementById("board");
+  addProjectBtn = document.getElementById("addProject");
+  runTestsBtn = document.getElementById("runTests");
+  testResultsDiv = document.getElementById("testResults");
+
+  modal = document.getElementById("modal");
+  modalTitle = document.getElementById("modalTitle");
+  subtasksDiv = document.getElementById("subtasks");
+  addSubtaskBtn = document.getElementById("addSubtask");
+  generateSubtasksBtn = document.getElementById("generateSubtasks");
+  closeModalBtn = document.getElementById("closeModal");
+  subtaskCounter = document.getElementById("subtaskCounter");
+
+  // Start hidden
   modal.classList.add("hidden");
+
+  // Bind events
+  addProjectBtn.addEventListener("click", onAddProject);
+  addSubtaskBtn.addEventListener("click", onAddSubtask);
+  closeModalBtn.addEventListener("click", () => modal.classList.add("hidden"));
+  runTestsBtn.addEventListener("click", runTests);
+  generateSubtasksBtn.addEventListener("click", onGenerateSubtasks);
 });
 
-// Add new project
-addProjectBtn.addEventListener("click", () => {
+// --- UI Helpers ---
+function setGenerateLoading(isLoading) {
+  if (!generateSubtasksBtn) return;
+  generateSubtasksBtn.disabled = isLoading;
+  generateSubtasksBtn.textContent = isLoading ? "… Generating" : "✨ Generate Example Subtasks";
+}
+
+function showError(message) {
+  console.error("[Planner Error]", message);
+  alert(message);
+}
+
+// --- Core actions ---
+function onAddProject() {
   const name = prompt("Project name:");
   if (!name) return;
   const project = { name, subtasks: [], completed: 0 };
   projects.push(project);
   renderProjects();
-});
+}
 
-// Render all projects
+function onAddSubtask() {
+  if (!currentProject) return;
+  const name = prompt("Subtask name:");
+  if (!name) return;
+  currentProject.subtasks.push({ name, done: false });
+  renderSubtasks();
+  // Manual edit: counter no longer represents an AI run
+  if (subtaskCounter) subtaskCounter.textContent = "";
+}
+
+async function onGenerateSubtasks() {
+  if (!currentProject) return;
+
+  setGenerateLoading(true);
+  try {
+    const res = await fetch("/api/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectName: currentProject.name })
+    });
+
+    // Backend might send { error: "..." } with 200 or non-200
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      throw new Error(`Bad response from server (status ${res.status})`);
+    }
+
+    if (!res.ok || data?.error) {
+      throw new Error(data?.error || `Server error (status ${res.status})`);
+    }
+
+    // Accept array or string fallback
+    let lines = Array.isArray(data.subtasks)
+      ? data.subtasks
+      : String(data.subtasks || "").split("\n");
+
+    // Clean & limit
+    let cleaned = lines
+      .map(t => t.replace(/^\s*\d+[\.\)]\s*/, "")) // "1." / "1)"
+      .map(t => t.replace(/^\s*[-*]\s*/, ""))      // "-" / "*"
+      .map(t => t.trim())
+      .filter(t => t.length > 0);
+
+    const total = cleaned.length;
+    const tasks = cleaned.slice(0, 8); // strict cap
+
+    if (tasks.length === 0) {
+      showError("No subtasks returned. Try a more specific project name.");
+      return;
+    }
+
+    tasks.forEach(task => currentProject.subtasks.push({ name: task, done: false }));
+
+    renderSubtasks();
+    // Only show counter for AI runs
+    if (subtaskCounter) {
+      subtaskCounter.textContent = total > tasks.length
+        ? `${tasks.length}/${total} subtasks shown`
+        : `${tasks.length} subtasks`;
+    }
+  } catch (err) {
+    showError(`Generate failed: ${err.message}`);
+  } finally {
+    setGenerateLoading(false);
+  }
+}
+
+// --- Rendering ---
 function renderProjects() {
+  if (!board) return;
   board.innerHTML = "";
   projects.forEach((p, index) => {
     const square = document.createElement("div");
     square.className = "square";
-    square.innerHTML = `<strong>${p.name}</strong>
+    square.innerHTML = `<strong>${escapeHtml(p.name)}</strong>
       <div>${p.completed}/${p.subtasks.length}</div>
       <div class="progress" style="width:${progressPercent(p)}%"></div>`;
     square.onclick = () => openProject(index);
@@ -42,63 +137,17 @@ function renderProjects() {
   });
 }
 
-function progressPercent(project) {
-  if (project.subtasks.length === 0) return 0;
-  return (project.completed / project.subtasks.length) * 100;
-}
-
-// Open project modal
 function openProject(index) {
   currentProject = projects[index];
   modalTitle.textContent = currentProject.name;
   renderSubtasks();
+  // Reset AI counter on open (fresh context)
+  if (subtaskCounter) subtaskCounter.textContent = "";
   modal.classList.remove("hidden");
 }
 
-// Add new subtask manually
-addSubtaskBtn.addEventListener("click", () => {
-  if (!currentProject) return;
-  const name = prompt("Subtask name:");
-  if (!name) return;
-  currentProject.subtasks.push({ name, done: false });
-  renderSubtasks();
-});
-
-// Generate subtasks with AI
-generateSubtasksBtn.addEventListener("click", async () => {
-  if (!currentProject) return;
-
-  const res = await fetch("/api/suggest", {
-    method: "POST",
-    body: JSON.stringify({ projectName: currentProject.name })
-  });
-
-  const data = await res.json();
-  console.log("AI suggested subtasks:", data);
-
-  // Clean and limit output
-  let cleaned = data.subtasks
-    .map(t => t.replace(/^\d+[\.\)]\s*/, "")) // strip "1." / "1)"
-    .map(t => t.replace(/^[-*]\s*/, ""))      // strip "-" / "*"
-    .map(t => t.trim())
-    .filter(t => t.length > 0);
-
-  const total = cleaned.length;
-  const tasks = cleaned.slice(0, 8); // cap at 8
-
-  tasks.forEach(task => {
-    currentProject.subtasks.push({ name: task, done: false });
-  });
-
-  renderSubtasks();
-
-  // Show counter
-  subtaskCounter.textContent = `${tasks.length}/${total} subtasks shown`;
-});
-
-// Render subtasks
 function renderSubtasks() {
-  if (!currentProject) return;
+  if (!currentProject || !subtasksDiv) return;
   subtasksDiv.innerHTML = "";
   currentProject.completed = 0;
 
@@ -106,29 +155,32 @@ function renderSubtasks() {
     const square = document.createElement("div");
     square.className = "square";
     if (t.done) square.classList.add("done");
-    square.innerHTML = t.name;
-
+    square.textContent = t.name;
     square.onclick = () => {
       t.done = !t.done;
       renderSubtasks();
+      // Manual toggles keep the counter as-is (it reflects the last AI run size)
     };
-
     subtasksDiv.appendChild(square);
     if (t.done) currentProject.completed++;
   });
 
   renderProjects();
-
-  // Reset counter when manually editing
-  subtaskCounter.textContent = "";
 }
 
-// Close modal
-closeModalBtn.addEventListener("click", () => {
-  modal.classList.add("hidden");
-});
+function progressPercent(project) {
+  if (project.subtasks.length === 0) return 0;
+  return (project.completed / project.subtasks.length) * 100;
+}
 
-// === TEST SUITE ===
+// --- Utils ---
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, s => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[s]));
+}
+
+// --- Test suite ---
 function runTests() {
   let report = "=== Running Planner Tests ===\n";
   projects = [];
@@ -153,14 +205,11 @@ function runTests() {
 
   report += "=== Tests complete ===";
   console.log(report);
-  testResultsDiv.textContent = report;
+  if (testResultsDiv) testResultsDiv.textContent = report;
 
   // Reset state
   projects = [];
   currentProject = null;
   renderProjects();
-  subtasksDiv.innerHTML = "";
+  if (subtasksDiv) subtasksDiv.innerHTML = "";
 }
-
-// Bind test button
-runTestsBtn.addEventListener("click", runTests);
