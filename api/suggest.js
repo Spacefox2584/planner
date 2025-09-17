@@ -1,28 +1,51 @@
-// Generate subtasks with AI
-generateSubtasksBtn.addEventListener("click", async () => {
-  if (!currentProject) return;
+// /api/suggest.js
+export default async function handler(req, res) {
+  try {
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
 
-  const res = await fetch("/api/suggest", {
-    method: "POST",
-    body: JSON.stringify({ projectName: currentProject.name })
-  });
+    // Parse request body
+    let projectName = "";
+    const buffers = [];
+    for await (const chunk of req) buffers.push(chunk);
+    const dataString = Buffer.concat(buffers).toString();
+    const body = JSON.parse(dataString);
+    projectName = body.projectName || "";
 
-  const data = await res.json();
-  console.log("AI suggested subtasks:", data);
+    if (!projectName) {
+      return res.status(400).json({ error: "Missing projectName" });
+    }
 
-  // Clean output
-  let tasks = data.subtasks
-    .map(t => t.replace(/^\d+[\.\)]\s*/, "")) // strip "1.", "1)"
-    .map(t => t.replace(/^[-*]\s*/, ""))      // strip "-" or "*"
-    .map(t => t.trim())                       // trim spaces
-    .filter(t => t.length > 0);               // remove empties
+    // Call OpenAI
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You are a helpful assistant that breaks projects into clear subtasks." },
+          { role: "user", content: `List 5 subtasks for this project: ${projectName}` }
+        ]
+      })
+    });
 
-  // Limit to 10 tasks
-  tasks = tasks.slice(0, 10);
+    const data = await response.json();
+    console.log("🔍 OpenAI raw response:", JSON.stringify(data, null, 2));
 
-  tasks.forEach(task => {
-    currentProject.subtasks.push({ name: task, done: false });
-  });
+    if (data.error) {
+      return res.status(500).json({ error: data.error.message || "OpenAI error" });
+    }
 
-  renderSubtasks();
-});
+    const text = data.choices?.[0]?.message?.content || "";
+    const subtasks = text.split("\n").filter(line => line.trim() !== "");
+
+    return res.status(200).json({ subtasks });
+  } catch (error) {
+    console.error("💥 API Error:", error);
+    return res.status(500).json({ error: "Unexpected server error" });
+  }
+}
