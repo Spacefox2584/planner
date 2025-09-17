@@ -1,10 +1,10 @@
-import OpenAI from "openai";
+const OpenAI = require("openai");
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -33,15 +33,13 @@ export default async function handler(req, res) {
 
     const text = response.choices[0]?.message?.content || "";
 
-    // Split into lines
     let tasks = text.split("\n").map(t =>
       t
-        .replace(/^\s*\d+[\.\)]\s*/, "") // remove numbering
-        .replace(/^\s*[-*]\s*/, "") // remove bullet marks
+        .replace(/^\s*\d+[\.\)]\s*/, "")
+        .replace(/^\s*[-*]\s*/, "")
         .trim()
     );
 
-    // Filter out empties and junk
     tasks = tasks.filter(
       t =>
         t &&
@@ -49,14 +47,13 @@ export default async function handler(req, res) {
         t.length > 2
     );
 
-    // Cap at 20 subtasks
     tasks = tasks.slice(0, 20);
 
-    res.status(200).json({ subtasks: tasks });
+    return res.status(200).json({ subtasks: tasks });
   } catch (err) {
-    console.error("OpenAI API error:", err);
-    res
+    console.error("OpenAI API error:", err.message);
+    return res
       .status(500)
       .json({ error: "Failed to generate subtasks", details: err.message });
   }
-}
+};
