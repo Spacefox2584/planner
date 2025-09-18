@@ -30,5 +30,5 @@ document.addEventListener("DOMContentLoaded", () => {
   showTool('planner', document.querySelector('.suite-btn[data-tool="planner"]'));
 });
 
-/* ========= Planner logic (keep same as before) ========= */
-/* ... (your existing Planner code from earlier goes here unchanged) ... */
+/* ========= Planner logic ========= */
+/* (Paste your existing full Planner v2.1 JS here, unchanged) */
