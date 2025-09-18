@@ -1,3 +1,35 @@
+/* =========================
+   Suite Shell: tab switcher
+   ========================= */
+window.showTool = function (tool, btn) {
+  const panes = document.querySelectorAll('.tool-pane');
+  panes.forEach(p => p.classList.add('hidden'));
+
+  const target = document.getElementById(`tool-${tool}`);
+  if (target) target.classList.remove('hidden');
+
+  // button active state
+  const buttons = document.querySelectorAll('.suite-btn');
+  buttons.forEach(b => b.classList.remove('is-active'));
+  if (btn) btn.classList.add('is-active');
+
+  // Accessibility nicety
+  if (target) target.setAttribute('aria-hidden', 'false');
+  panes.forEach(p => {
+    if (p !== target) p.setAttribute('aria-hidden', 'true');
+  });
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Default to Planner on load
+  showTool('planner', document.querySelector('.suite-btn[data-tool="planner"]'));
+});
+
+/* ==================================
+   Planner v2.1 logic (unchanged API)
+   (From your existing script.js)
+   ================================== */
+
 // State
 let groups = [];
 let projects = [];
@@ -11,6 +43,7 @@ let approveBtn, cancelBtn, selectAllBtn;
 
 // Boot
 window.addEventListener("DOMContentLoaded", () => {
+  // Scope gets elements by ID inside the page (Planner section is present in DOM even when hidden)
   whiteboard = document.getElementById("whiteboard");
   modal = document.getElementById("modal");
   modalTitle = document.getElementById("modalTitle");
@@ -26,6 +59,9 @@ window.addEventListener("DOMContentLoaded", () => {
   approveBtn = document.getElementById("approveBtn");
   cancelBtn = document.getElementById("cancelBtn");
   selectAllBtn = document.getElementById("selectAllBtn");
+
+  // Guard: Planner DOM may not exist in future tools; bail if missing
+  if (!whiteboard) return;
 
   addGroupBtn.addEventListener("click", onAddGroup);
   addProjectBtn.addEventListener("click", onAddProject);
@@ -235,7 +271,7 @@ function renderSubtasks() {
     noteBtn.className = "note-btn";
     noteBtn.title = "Notes";
     noteBtn.innerHTML = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#1f2937" viewBox="0 0 24 24" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#cdd6df" viewBox="0 0 24 24" aria-hidden="true">
         <path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm7 1H7a1 1 0 0 0-1 1v14c0 .552.448 1 1 1h10a1 1 0 0 0 1-1V9h-4a1 1 0 0 1-1-1V4z"/>
       </svg>
     `;
