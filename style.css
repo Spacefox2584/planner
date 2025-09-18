@@ -83,7 +83,7 @@ body[data-theme="dark"] .suite-nav {
 .placeholder h2 { margin-top: 0; }
 .muted { color: var(--muted); }
 
-/* -------- Planner styling (uses variables) -------- */
+/* -------- Planner styling -------- */
 h1 { text-align: center; margin: 6px 0 10px; }
 
 button {
