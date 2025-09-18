@@ -6,7 +6,8 @@
   --muted: #4a5568;
   --brand: #ff6b2c;
   --border: #d0d7e2;
-  --progress-fill: #b6e0c4;
+  --progress-fill: #4a90e2; /* calm blue for light theme */
+  --hover-border: #ab68ff;  /* purple highlight */
   --radius: 14px;
 }
 
