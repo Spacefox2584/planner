@@ -1,36 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Planner v2.0</title>
-  <link rel="stylesheet" href="style.css">
-  <!-- SortableJS -->
+  <meta charset="UTF-8" />
+  <title>Planner v2.1</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- SortableJS (drag & drop between headings/lanes) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
 <body>
-  <h1>Planner v2.0</h1>
-  <button id="addGroup">+ Add Group</button>
-  <button id="addProject">+ Add Project</button>
+  <h1>Planner v2.1</h1>
+
+  <div id="controls">
+    <button id="addGroup">+ Add Heading</button>
+    <button id="addProject">+ Add Project</button>
+  </div>
+
+  <!-- Whiteboard (stacked full-width lanes) -->
   <div id="whiteboard"></div>
 
-  <!-- Modal for project subtasks -->
+  <!-- Project Modal -->
   <div id="modal" class="hidden">
     <div class="modal-content">
-      <h2 id="modalTitle"></h2>
-      <button id="addSubtask">+ Add Subtask</button>
-      <button id="generateSubtasks">✨ Generate Example Subtasks</button>
+      <div class="modal-header">
+        <div class="modal-title" id="modalTitle">Project</div>
+        <button id="closeModal">Close</button>
+      </div>
 
-      <div id="subtasks"></div>
-      <div id="subtaskCounter" class="counter"></div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+        <button id="addSubtask">+ Add Subtask</button>
+        <button id="generateSubtasks">✨ Generate Example Subtasks</button>
+      </div>
 
-      <!-- Approval controls -->
+      <!-- Approval controls (visible only during AI suggestions) -->
       <div id="approvalControls" class="hidden">
         <button id="approveBtn">✅ Approve Selected</button>
         <button id="cancelBtn">❌ Cancel</button>
         <button id="selectAllBtn">☑ Select All</button>
       </div>
 
-      <button id="closeModal">⬅ Back</button>
+      <div id="subtasks"></div>
+      <div id="subtaskCounter" class="counter"></div>
     </div>
   </div>
 
