@@ -1,3 +1,4 @@
+// State
 let groups = [];
 let projects = [];
 let currentProject = null;
@@ -8,6 +9,7 @@ let whiteboard, modal, modalTitle, subtasksDiv, subtaskCounter;
 let addGroupBtn, addProjectBtn, addSubtaskBtn, generateSubtasksBtn, closeModalBtn;
 let approveBtn, cancelBtn, selectAllBtn;
 
+// Boot
 window.addEventListener("DOMContentLoaded", () => {
   whiteboard = document.getElementById("whiteboard");
   modal = document.getElementById("modal");
@@ -25,8 +27,6 @@ window.addEventListener("DOMContentLoaded", () => {
   cancelBtn = document.getElementById("cancelBtn");
   selectAllBtn = document.getElementById("selectAllBtn");
 
-  modal.classList.add("hidden");
-
   addGroupBtn.addEventListener("click", onAddGroup);
   addProjectBtn.addEventListener("click", onAddProject);
   addSubtaskBtn.addEventListener("click", onAddSubtask);
@@ -36,34 +36,47 @@ window.addEventListener("DOMContentLoaded", () => {
   cancelBtn.addEventListener("click", cancelPendingSubtasks);
   selectAllBtn.addEventListener("click", toggleSelectAll);
 
-  // ✅ Preloaded groups
-  groups = [
-    { name: "Top Priority", id: Date.now() + 1 },
-    { name: "On Hold", id: Date.now() + 2 },
-    { name: "Completed", id: Date.now() + 3 }
-  ];
+  modal.classList.add("hidden");
 
-  // ✅ Preloaded demo projects
+  // Preload a couple of lanes and projects so it's not empty
+  const t = Date.now();
+  groups = [
+    { id: t + 1, name: "Lane A" },
+    { id: t + 2, name: "Lane B" }
+  ];
   projects = [
-    { name: "ThrottleBoss Website", id: Date.now() + 10, subtasks: [], completed: 0, groupId: groups[0].id, color: randomPastel() },
-    { name: "Supplier Outreach", id: Date.now() + 11, subtasks: [], completed: 0, groupId: groups[1].id, color: randomPastel() },
-    { name: "Ops Board Prototype", id: Date.now() + 12, subtasks: [], completed: 0, groupId: groups[2].id, color: randomPastel() }
+    { id: t + 11, name: "ThrottleBoss Website", groupId: groups[0].id, subtasks: [], completed: 0 },
+    { id: t + 12, name: "Supplier Outreach",     groupId: groups[1].id, subtasks: [], completed: 0 }
   ];
 
   renderGroups();
 });
 
-// Helpers
-function randomPastel() {
-  const colors = ["#FFFA9C", "#AEEEEE", "#FFB6C1", "#D1FFD6", "#FFDAB9", "#C6C6FF"];
-  return colors[Math.floor(Math.random() * colors.length)];
+/* ========= Groups (Headings) ========= */
+function onAddGroup() {
+  const name = prompt("Heading name:");
+  if (!name) return;
+  groups.push({ id: Date.now(), name });
+  renderGroups();
 }
 
-// Groups
-function onAddGroup() {
-  const name = prompt("Group name:");
+function renameGroup(groupId) {
+  const g = groups.find(x => x.id === groupId);
+  if (!g) return;
+  const name = prompt("Rename heading:", g.name);
   if (!name) return;
-  groups.push({ name, id: Date.now() });
+  g.name = name;
+  renderGroups();
+}
+
+function deleteGroup(groupId) {
+  if (!confirm("Delete heading and keep its projects? (They will move to the first heading if available)")) return;
+  const remaining = groups.filter(g => g.id !== groupId);
+  const fallback = remaining[0]?.id;
+  projects.forEach(p => {
+    if (p.groupId === groupId && fallback) p.groupId = fallback;
+  });
+  groups = remaining;
   renderGroups();
 }
 
@@ -72,66 +85,114 @@ function renderGroups() {
   groups.forEach(group => {
     const g = document.createElement("div");
     g.className = "group";
-    g.innerHTML = `<h3>${escapeHtml(group.name)}</h3>
-      <div id="group-${group.id}" class="project-list"></div>`;
+    g.innerHTML = `
+      <div class="group-header">
+        <div class="group-title">${escapeHtml(group.name)}</div>
+        <div class="group-actions">
+          <button onclick="renameGroup(${group.id})">✎ Rename</button>
+          <button onclick="deleteGroup(${group.id})">🗑 Delete</button>
+        </div>
+      </div>
+      <div id="group-${group.id}" class="project-row"></div>
+    `;
     whiteboard.appendChild(g);
 
-    const listEl = g.querySelector(".project-list");
+    // Make lane sortable
+    const listEl = g.querySelector(".project-row");
     Sortable.create(listEl, {
       group: "projects",
       animation: 150,
-      onEnd: () => {
-        // could update state later
+      onAdd: evt => {
+        const projId = Number(evt.item.dataset.pid);
+        const p = projects.find(x => x.id === projId);
+        if (p) p.groupId = group.id;
       }
     });
   });
-  renderProjects();
+
+  renderProjects(true);
 }
 
-// Projects
+/* ========= Projects ========= */
 function onAddProject() {
   if (!groups.length) {
-    alert("Add a group first!");
+    alert("Add a heading first!");
     return;
   }
   const name = prompt("Project name:");
   if (!name) return;
   projects.push({
-    name,
     id: Date.now(),
-    subtasks: [],
-    completed: 0,
+    name,
     groupId: groups[0].id,
-    color: randomPastel()
+    subtasks: [],
+    completed: 0
   });
+  renderProjects(true);
+}
+
+function renameProject(pid) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  const name = prompt("Rename project:", p.name);
+  if (!name) return;
+  p.name = name;
   renderProjects();
 }
 
-function renderProjects() {
+function deleteProject(pid) {
+  if (!confirm("Delete this project?")) return;
+  projects = projects.filter(p => p.id !== pid);
+  renderProjects(true);
+}
+
+function renderProjects(clearContainers = false) {
+  if (clearContainers) {
+    groups.forEach(g => {
+      const container = document.getElementById(`group-${g.id}`);
+      if (container) container.innerHTML = "";
+    });
+  }
+
   projects.forEach(p => {
     const container = document.getElementById(`group-${p.groupId}`);
     if (!container) return;
-    let existing = document.getElementById(`project-${p.id}`);
-    if (!existing) {
-      const div = document.createElement("div");
-      div.className = "project";
-      div.id = `project-${p.id}`;
-      div.style.background = p.color || "#FFFA9C";
-      div.innerHTML = `
-        <strong>${escapeHtml(p.name)}</strong>
-        <div class="progress" style="width:${progressPercent(p)}%"></div>
-        <div class="percent">${Math.round(progressPercent(p))}%</div>
+
+    let card = document.getElementById(`project-${p.id}`);
+    const percent = Math.round(progressPercent(p));
+    if (!card) {
+      card = document.createElement("div");
+      card.className = "project";
+      card.id = `project-${p.id}`;
+      card.dataset.pid = String(p.id);
+      card.innerHTML = `
+        <div class="fill" style="height:${percent}%;"></div>
+        <div class="label" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
+        <div class="percent">${percent}%</div>
+        <div class="p-actions">
+          <button class="icon-btn" title="Rename" onclick="event.stopPropagation(); renameProject(${p.id});">✎</button>
+          <button class="icon-btn" title="Delete" onclick="event.stopPropagation(); deleteProject(${p.id});">🗑</button>
+        </div>
       `;
-      div.onclick = () => openProject(p.id);
-      container.appendChild(div);
+      card.onclick = () => openProject(p.id);
+      container.appendChild(card);
     } else {
-      existing.querySelector(".progress").style.width = `${progressPercent(p)}%`;
-      existing.querySelector(".percent").textContent = `${Math.round(progressPercent(p))}%`;
+      card.querySelector(".label").textContent = p.name;
+      card.querySelector(".label").setAttribute("title", p.name);
+      card.querySelector(".percent").textContent = `${percent}%`;
+      card.querySelector(".fill").style.height = `${percent}%`;
+      if (!card.parentElement || card.parentElement.id !== `group-${p.groupId}`) {
+        container.appendChild(card);
+      }
     }
   });
 }
 
-// Modal + Subtasks
+function progressPercent(project) {
+  return project.subtasks.length ? (project.completed / project.subtasks.length) * 100 : 0;
+}
+
+/* ========= Modal + Subtasks ========= */
 function openProject(id) {
   currentProject = projects.find(p => p.id === id);
   modalTitle.textContent = currentProject.name;
@@ -160,7 +221,6 @@ function renderSubtasks() {
     const span = document.createElement("span");
     span.className = "task-text";
     span.textContent = t.name;
-
     span.ondblclick = () => {
       const newName = prompt("Edit task:", t.name);
       if (newName) {
@@ -168,23 +228,28 @@ function renderSubtasks() {
         renderSubtasks();
       }
     };
-
     row.appendChild(span);
 
-    const notesBtn = document.createElement("button");
-    notesBtn.textContent = "📝";
-    notesBtn.onclick = (e) => {
+    // Notes icon (inline SVG)
+    const noteBtn = document.createElement("button");
+    noteBtn.className = "note-btn";
+    noteBtn.title = "Notes";
+    noteBtn.innerHTML = `
+      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#1f2937" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7 3h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm7 1H7a1 1 0 0 0-1 1v14c0 .552.448 1 1 1h10a1 1 0 0 0 1-1V9h-4a1 1 0 0 1-1-1V4z"/>
+      </svg>
+    `;
+    noteBtn.onclick = (e) => {
       e.stopPropagation();
       const note = prompt("Notes:", t.notes || "");
-      if (note !== null) {
-        t.notes = note;
-      }
+      if (note !== null) t.notes = note;
     };
-    row.appendChild(notesBtn);
+    row.appendChild(noteBtn);
 
     const del = document.createElement("span");
-    del.textContent = "×";
     del.className = "delete-btn";
+    del.title = "Delete subtask";
+    del.textContent = "×";
     del.onclick = (e) => {
       e.stopPropagation();
       currentProject.subtasks.splice(i, 1);
@@ -192,6 +257,7 @@ function renderSubtasks() {
     };
     row.appendChild(del);
 
+    // Toggle done by clicking anywhere
     row.onclick = () => {
       t.done = !t.done;
       renderSubtasks();
@@ -200,14 +266,12 @@ function renderSubtasks() {
     subtasksDiv.appendChild(row);
     if (t.done) currentProject.completed++;
   });
+
+  // Update project progress visuals
   renderProjects();
 }
 
-function progressPercent(project) {
-  return project.subtasks.length ? (project.completed / project.subtasks.length) * 100 : 0;
-}
-
-// AI Subtasks
+/* ========= AI Subtasks (approval flow) ========= */
 async function onGenerateSubtasks() {
   if (!currentProject) return;
   generateSubtasksBtn.disabled = true;
@@ -222,12 +286,11 @@ async function onGenerateSubtasks() {
     if (!res.ok || data?.error) throw new Error(data?.error || "Server error");
 
     let lines = Array.isArray(data.subtasks) ? data.subtasks : String(data.subtasks || "").split("\n");
-
     let cleaned = lines
       .map(t => t.replace(/^\s*\d+[\.\)]\s*/, "").replace(/^\s*[-*]\s*/, "").trim())
-      .filter(t => t && !/^sure|here are|of course/i.test(t));
+      .filter(t => t && !/^sure|here are|of course|okay/i.test(t));
 
-    pendingSubtasks = cleaned.slice(0, 20); // cap at 20
+    pendingSubtasks = cleaned.slice(0, 20);
     renderPendingSubtasks();
   } catch (err) {
     alert(`Generate failed: ${err.message}`);
@@ -254,7 +317,7 @@ function renderPendingSubtasks() {
     row.appendChild(cb);
     row.appendChild(label);
 
-    // Whole row clickable
+    // whole row toggles checkbox
     row.onclick = (e) => {
       if (e.target.tagName !== "INPUT") cb.checked = !cb.checked;
     };
@@ -290,7 +353,7 @@ function toggleSelectAll() {
   selectAllBtn.textContent = allChecked ? "☑ Select All" : "☐ Deselect All";
 }
 
-// Escape HTML
+/* ========= Utils ========= */
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, s => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
