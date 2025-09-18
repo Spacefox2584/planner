@@ -18,7 +18,8 @@ body[data-theme="dark"] {
   --muted: #a0a1a7;
   --brand: #ff6b2c;
   --border: #3a3c3e;
-  --progress-fill: #3d5a40;
+  --progress-fill: #0052cc; /* ChatGPT-like deep blue */
+
 }
 
 /* Base Layout */
