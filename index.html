@@ -2,48 +2,94 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Planner v2.1</title>
+  <title>Master Suite — Suite Shell v1</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Base styles for shell + planner -->
   <link rel="stylesheet" href="style.css" />
-  <!-- SortableJS (drag & drop between headings/lanes) -->
+
+  <!-- SortableJS (Planner drag & drop) -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 </head>
 <body>
-  <h1>Planner v2.1</h1>
-
-  <div id="controls">
-    <button id="addGroup">+ Add Heading</button>
-    <button id="addProject">+ Add Project</button>
-  </div>
-
-  <!-- Whiteboard (stacked full-width lanes) -->
-  <div id="whiteboard"></div>
-
-  <!-- Project Modal -->
-  <div id="modal" class="hidden">
-    <div class="modal-content">
-      <div class="modal-header">
-        <div class="modal-title" id="modalTitle">Project</div>
-        <button id="closeModal">Close</button>
-      </div>
-
-      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-        <button id="addSubtask">+ Add Subtask</button>
-        <button id="generateSubtasks">✨ Generate Example Subtasks</button>
-      </div>
-
-      <!-- Approval controls (visible only during AI suggestions) -->
-      <div id="approvalControls" class="hidden">
-        <button id="approveBtn">✅ Approve Selected</button>
-        <button id="cancelBtn">❌ Cancel</button>
-        <button id="selectAllBtn">☑ Select All</button>
-      </div>
-
-      <div id="subtasks"></div>
-      <div id="subtaskCounter" class="counter"></div>
+  <!-- Top Nav -->
+  <header class="suite-nav">
+    <div class="suite-brand">
+      <span class="suite-dot"></span>
+      <strong>Master Suite</strong>
+      <span class="suite-sub">Shell v1</span>
     </div>
-  </div>
+    <nav class="suite-buttons" role="tablist" aria-label="Tool switcher">
+      <button class="suite-btn is-active" data-tool="planner" onclick="showTool('planner', this)">Planner (X01)</button>
+      <button class="suite-btn" data-tool="listings" onclick="showTool('listings', this)">Listings (X02)</button>
+      <button class="suite-btn" data-tool="scraper" onclick="showTool('scraper', this)">Scraper (X03)</button>
+    </nav>
+  </header>
 
+  <!-- Content Area -->
+  <main class="suite-content">
+    <!-- TOOL: Planner (X01 v2.1) -->
+    <section id="tool-planner" class="tool-pane" role="tabpanel" aria-labelledby="tab-planner">
+      <h1>Planner v2.1</h1>
+
+      <div id="controls">
+        <button id="addGroup">+ Add Heading</button>
+        <button id="addProject">+ Add Project</button>
+      </div>
+
+      <!-- Whiteboard (stacked full-width lanes) -->
+      <div id="whiteboard"></div>
+
+      <!-- Project Modal -->
+      <div id="modal" class="hidden" aria-hidden="true">
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+          <div class="modal-header">
+            <div class="modal-title" id="modalTitle">Project</div>
+            <button id="closeModal" aria-label="Close project dialog">Close</button>
+          </div>
+
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+            <button id="addSubtask">+ Add Subtask</button>
+            <button id="generateSubtasks">✨ Generate Example Subtasks</button>
+          </div>
+
+          <!-- Approval controls (visible only during AI suggestions) -->
+          <div id="approvalControls" class="hidden">
+            <button id="approveBtn">✅ Approve Selected</button>
+            <button id="cancelBtn">❌ Cancel</button>
+            <button id="selectAllBtn">☑ Select All</button>
+          </div>
+
+          <div id="subtasks"></div>
+          <div id="subtaskCounter" class="counter"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TOOL: Listings (X02 placeholder) -->
+    <section id="tool-listings" class="tool-pane hidden" role="tabpanel" aria-labelledby="tab-listings">
+      <div class="placeholder">
+        <h2>Listings (X02)</h2>
+        <p>Coming soon. This pane will host your Listings tool.</p>
+        <ol>
+          <li>Add a new `<section id="tool-yourtool">…</section>` for each future tool</li>
+          <li>Create a matching nav `<button>` that calls <code>showTool('yourtool')</code></li>
+          <li>Drop your HTML/JS into that section, or lazy-load via <code>import()</code></li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- TOOL: Scraper (X03 placeholder) -->
+    <section id="tool-scraper" class="tool-pane hidden" role="tabpanel" aria-labelledby="tab-scraper">
+      <div class="placeholder">
+        <h2>Scraper (X03)</h2>
+        <p>Coming soon. Lightweight, browser-only to start; serverless `/api` as needed.</p>
+        <p class="muted">Tip: keep each tool self-contained: HTML UI + small module in <code>script.js</code>.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Shell + Planner logic -->
   <script src="script.js"></script>
 </body>
 </html>
