@@ -10,16 +10,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    // ✅ Manually parse request body (Vercel quirk fix)
+    // Manually parse request body (works reliably on Vercel)
     let body = {};
     try {
       const buffers = [];
-      for await (const chunk of req) {
-        buffers.push(chunk);
-      }
+      for await (const chunk of req) buffers.push(chunk);
       const data = Buffer.concat(buffers).toString();
       body = data ? JSON.parse(data) : {};
-    } catch (parseErr) {
+    } catch {
       return res.status(400).json({ error: "Invalid JSON body" });
     }
 
@@ -28,7 +26,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing project name" });
     }
 
-    // ✅ Call OpenAI
     const response = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
@@ -42,28 +39,23 @@ export default async function handler(req, res) {
           content: `Suggest some subtasks for the project: ${projectName}`
         }
       ],
-      max_tokens: 200
+      max_tokens: 240
     });
 
-    const text = response.choices[0]?.message?.content || "";
-
-    // ✅ Clean output into array
+    const text = response.choices?.[0]?.message?.content || "";
     let tasks = text.split("\n").map(t =>
-      t
-        .replace(/^\s*\d+[\.\)]\s*/, "")
-        .replace(/^\s*[-*]\s*/, "")
-        .trim()
+      t.replace(/^\s*\d+[\.\)]\s*/, "").replace(/^\s*[-*]\s*/, "").trim()
     );
-
-    tasks = tasks.filter(t => t && t.length > 2).slice(0, 20);
+    tasks = tasks.filter(t =>
+      t && t.length > 2 && !/^sure|here are|of course|okay/i.test(t)
+    ).slice(0, 20);
 
     return res.status(200).json({ subtasks: tasks });
   } catch (err) {
-    console.error("API error:", err);
-    // ✅ Always return JSON, never HTML
+    console.error("OpenAI API error:", err);
     return res.status(500).json({
       error: "Failed to generate subtasks",
-      details: err.message || "Unknown error"
+      details: err?.message || "Unknown error"
     });
   }
 }
