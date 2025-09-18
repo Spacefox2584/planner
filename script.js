@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* ==================================
-   Planner v2.1 logic
+   Planner v2.1 + KV persistence
    ================================== */
 
 let groups = [];
@@ -43,7 +43,33 @@ let whiteboard, modal, modalTitle, subtasksDiv, subtaskCounter;
 let addGroupBtn, addProjectBtn, addSubtaskBtn, generateSubtasksBtn, closeModalBtn;
 let approveBtn, cancelBtn, selectAllBtn;
 
-window.addEventListener("DOMContentLoaded", () => {
+/* ---- Persistence helpers ---- */
+async function saveState() {
+  try {
+    await fetch("/api/savePlanner", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ groups, projects })
+    });
+  } catch (err) {
+    console.error("Save failed:", err);
+  }
+}
+
+async function loadState() {
+  try {
+    const res = await fetch("/api/loadPlanner");
+    const data = await res.json();
+    if (data.groups && data.projects) {
+      groups = data.groups;
+      projects = data.projects;
+    }
+  } catch (err) {
+    console.error("Load failed:", err);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", async () => {
   whiteboard = document.getElementById("whiteboard");
   modal = document.getElementById("modal");
   modalTitle = document.getElementById("modalTitle");
@@ -73,24 +99,32 @@ window.addEventListener("DOMContentLoaded", () => {
 
   modal.classList.add("hidden");
 
-  const t = Date.now();
-  groups = [
-    { id: t + 1, name: "Lane A" },
-    { id: t + 2, name: "Lane B" }
-  ];
-  projects = [
-    { id: t + 11, name: "ThrottleBoss Website", groupId: groups[0].id, subtasks: [], completed: 0 },
-    { id: t + 12, name: "Supplier Outreach",     groupId: groups[1].id, subtasks: [], completed: 0 }
-  ];
+  // Load from backend
+  await loadState();
+
+  // If empty, seed defaults
+  if (!groups.length && !projects.length) {
+    const t = Date.now();
+    groups = [
+      { id: t + 1, name: "Lane A" },
+      { id: t + 2, name: "Lane B" }
+    ];
+    projects = [
+      { id: t + 11, name: "ThrottleBoss Website", groupId: groups[0].id, subtasks: [], completed: 0 },
+      { id: t + 12, name: "Supplier Outreach", groupId: groups[1].id, subtasks: [], completed: 0 }
+    ];
+  }
 
   renderGroups();
 });
 
+/* ---- Groups ---- */
 function onAddGroup() {
   const name = prompt("Heading name:");
   if (!name) return;
   groups.push({ id: Date.now(), name });
   renderGroups();
+  saveState();
 }
 
 function renameGroup(groupId) {
@@ -100,6 +134,7 @@ function renameGroup(groupId) {
   if (!name) return;
   g.name = name;
   renderGroups();
+  saveState();
 }
 
 function deleteGroup(groupId) {
@@ -111,6 +146,7 @@ function deleteGroup(groupId) {
   });
   groups = remaining;
   renderGroups();
+  saveState();
 }
 
 function renderGroups() {
@@ -138,6 +174,7 @@ function renderGroups() {
         const projId = Number(evt.item.dataset.pid);
         const p = projects.find(x => x.id === projId);
         if (p) p.groupId = group.id;
+        saveState();
       }
     });
   });
@@ -145,6 +182,7 @@ function renderGroups() {
   renderProjects(true);
 }
 
+/* ---- Projects ---- */
 function onAddProject() {
   if (!groups.length) {
     alert("Add a heading first!");
@@ -160,6 +198,7 @@ function onAddProject() {
     completed: 0
   });
   renderProjects(true);
+  saveState();
 }
 
 function renameProject(pid) {
@@ -169,12 +208,14 @@ function renameProject(pid) {
   if (!name) return;
   p.name = name;
   renderProjects();
+  saveState();
 }
 
 function deleteProject(pid) {
   if (!confirm("Delete this project?")) return;
   projects = projects.filter(p => p.id !== pid);
   renderProjects(true);
+  saveState();
 }
 
 function renderProjects(clearContainers = false) {
@@ -223,6 +264,7 @@ function progressPercent(project) {
   return project.subtasks.length ? (project.completed / project.subtasks.length) * 100 : 0;
 }
 
+/* ---- Subtasks ---- */
 function openProject(id) {
   currentProject = projects.find(p => p.id === id);
   modalTitle.textContent = currentProject.name;
@@ -236,6 +278,7 @@ function onAddSubtask() {
   if (!name) return;
   currentProject.subtasks.push({ name, done: false, notes: "" });
   renderSubtasks();
+  saveState();
 }
 
 function renderSubtasks() {
@@ -256,6 +299,7 @@ function renderSubtasks() {
       if (newName) {
         t.name = newName;
         renderSubtasks();
+        saveState();
       }
     };
     row.appendChild(span);
@@ -268,6 +312,7 @@ function renderSubtasks() {
       e.stopPropagation();
       const note = prompt("Notes:", t.notes || "");
       if (note !== null) t.notes = note;
+      saveState();
     };
     row.appendChild(noteBtn);
 
@@ -279,12 +324,14 @@ function renderSubtasks() {
       e.stopPropagation();
       currentProject.subtasks.splice(i, 1);
       renderSubtasks();
+      saveState();
     };
     row.appendChild(del);
 
     row.onclick = () => {
       t.done = !t.done;
       renderSubtasks();
+      saveState();
     };
 
     subtasksDiv.appendChild(row);
@@ -294,6 +341,7 @@ function renderSubtasks() {
   renderProjects();
 }
 
+/* ---- AI Subtask Generation ---- */
 async function onGenerateSubtasks() {
   if (!currentProject) return;
   generateSubtasksBtn.disabled = true;
@@ -359,6 +407,7 @@ function approvePendingSubtasks() {
   pendingSubtasks = [];
   document.getElementById("approvalControls").classList.add("hidden");
   renderSubtasks();
+  saveState();
 }
 
 function cancelPendingSubtasks() {
@@ -367,6 +416,7 @@ function cancelPendingSubtasks() {
   renderSubtasks();
 }
 
+/* ---- Utilities ---- */
 function toggleSelectAll() {
   const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
   const allChecked = [...checkboxes].every(cb => cb.checked);
@@ -375,7 +425,7 @@ function toggleSelectAll() {
 }
 
 function escapeHtml(str) {
-  return String(str).replace(/[&<>"']/g, s => ({
+  return String(str).replace(/[&<>\"']/g, s => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
   }[s]));
 }
