@@ -3,7 +3,7 @@ import { Redis } from "@upstash/redis";
 // 🔑 Replace these with your actual values from Upstash REST API
 const redis = new Redis({
   url: "https://welcome-pangolin-5168.upstash.io",   // <-- your KV_REST_API_URL
-  token: "eyJhbGciOi..."           // <-- your KV_REST_API_TOKEN
+  token: "ARjrASQ-OTBkODQwYmEtNDMxYS00NjBiLWIyZGItNjk0OTc5MjdkYTJhQVJRd0FBSW1jREk1T1RGbE1EVXdOMlEyWVRVMFpUTmpZakJqTXpoak9UYzVPRFk1WmpOak9YQXlOVEUyT0E="           // <-- your KV_REST_API_TOKEN
 });
 
 export default async function handler(req, res) {
