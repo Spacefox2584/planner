@@ -1,7 +1,4 @@
 import { kv } from "@vercel/kv";
-console.log("KV_REST_API_URL present:", !!process.env.KV_REST_API_URL);
-console.log("KV_REST_API_TOKEN present:", !!process.env.KV_REST_API_TOKEN);
-
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -15,7 +12,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Missing groups or projects" });
     }
 
-    await kv.set("planner-data", JSON.stringify({ groups, projects }));
+    const payload = JSON.stringify({ groups, projects });
+    console.log("Saving to KV:", payload);
+
+    await kv.set("planner-data", payload);
+
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error("Save error:", err);
