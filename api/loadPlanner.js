@@ -1,6 +1,4 @@
 import { kv } from "@vercel/kv";
-console.log("KV_REST_API_URL present:", !!process.env.KV_REST_API_URL);
-console.log("KV_REST_API_TOKEN present:", !!process.env.KV_REST_API_TOKEN);
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -9,6 +7,7 @@ export default async function handler(req, res) {
 
   try {
     const data = await kv.get("planner-data");
+    console.log("Loaded from KV:", data);
 
     if (!data) {
       return res.status(200).json({ groups: [], projects: [] });
