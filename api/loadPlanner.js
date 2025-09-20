@@ -1,4 +1,10 @@
-import { kv } from "@vercel/kv";
+import { Redis } from "@upstash/redis";
+
+// 🔑 Replace these with your actual values from Upstash REST API
+const redis = new Redis({
+  url: "https://xxx.upstash.io",   // <-- your KV_REST_API_URL
+  token: "eyJhbGciOi..."           // <-- your KV_REST_API_TOKEN
+});
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -6,7 +12,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const data = await kv.get("planner-data");
+    const data = await redis.get("planner-data");
     console.log("Loaded from KV:", data);
 
     if (!data) {
