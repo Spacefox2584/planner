@@ -2,7 +2,7 @@ import { Redis } from "@upstash/redis";
 
 // 🔑 Replace these with your actual values from Upstash REST API
 const redis = new Redis({
-  url: "https://xxx.upstash.io",   // <-- your KV_REST_API_URL
+  url: "https://welcome-pangolin-5168.upstash.io",   // <-- your KV_REST_API_URL
   token: "eyJhbGciOi..."           // <-- your KV_REST_API_TOKEN
 });
 
