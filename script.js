@@ -31,7 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 /* ==================================
-   Planner v2.4 (Supabase persistence)
+   Planner v2.6 (Supabase persistence)
    ================================== */
 
 let groups = [];
@@ -46,15 +46,13 @@ let approveBtn, cancelBtn, selectAllBtn;
 /* ---- Persistence helpers (Supabase via /api) ---- */
 async function saveState() {
   try {
-    // Only save projects (current Supabase schema)
     const res = await fetch("/api/savePlanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projects })
     });
-    const data = await res.json();
     if (!res.ok) {
-      console.error("Save failed:", data?.error || data);
+      console.error("Save failed:", await res.json());
     } else {
       console.log("Save success.");
     }
@@ -67,33 +65,18 @@ async function loadState() {
   try {
     const res = await fetch("/api/loadPlanner");
     const data = await res.json();
-    // Supabase endpoint returns { projects }
     if (Array.isArray(data.projects)) {
-      projects = data.projects.map(p => ({
-        // Ensure the shape the UI expects
-        id: p.id ?? Date.now(),
-        name: p.name ?? "Untitled",
-        groupId: typeof p.groupId !== "undefined" ? p.groupId : (p.group_id ?? null),
-        subtasks: Array.isArray(p.subtasks) ? p.subtasks : [],
-        completed: typeof p.completed === "number" ? p.completed : 0
-      }));
-      console.log("Loaded projects from Supabase:", projects);
-    } else {
-      console.log("No projects in DB yet.");
+      projects = data.projects;
     }
   } catch (err) {
     console.error("Load failed:", err);
   }
 }
 
-/* Ensure we always have visible lanes, even if groups weren’t persisted */
+/* Ensure lanes exist */
 function ensureGroups() {
-  // If groups already exist, keep them
   if (groups.length) return;
-
-  // Try to infer from project.groupId values
   const ids = [...new Set(projects.map(p => p.groupId).filter(Boolean))];
-
   if (ids.length >= 2) {
     groups = [
       { id: ids[0], name: "Lane A" },
@@ -104,10 +87,8 @@ function ensureGroups() {
       { id: ids[0], name: "Lane A" },
       { id: Date.now() + 2, name: "Lane B" }
     ];
-    // Put any projects lacking groupId into first lane
     projects.forEach(p => { if (!p.groupId) p.groupId = groups[0].id; });
   } else {
-    // Nothing to infer → seed defaults and move existing projects to first lane
     const t = Date.now();
     groups = [
       { id: t + 1, name: "Lane A" },
@@ -147,10 +128,8 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   modal.classList.add("hidden");
 
-  // Load latest from Supabase
   await loadState();
 
-  // If both groups & projects are empty, seed defaults
   if (!groups.length && !projects.length) {
     const t = Date.now();
     groups = [
@@ -159,13 +138,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     ];
     projects = [
       { id: t + 11, name: "ThrottleBoss Website", groupId: groups[0].id, subtasks: [], completed: 0 },
-      { id: t + 12, name: "Supplier Outreach",     groupId: groups[1].id, subtasks: [], completed: 0 }
+      { id: t + 12, name: "Supplier Outreach", groupId: groups[1].id, subtasks: [], completed: 0 }
     ];
   }
 
-  // Make sure lanes exist if projects came from DB without lanes
   ensureGroups();
-
   renderGroups();
 });
 
@@ -175,8 +152,7 @@ function onAddGroup() {
   if (!name) return;
   groups.push({ id: Date.now(), name });
   renderGroups();
-  // Groups aren’t persisted yet; optional future: save groups in DB
-  saveState(); // still call so projects re-save if positions change later
+  saveState();
 }
 
 function renameGroup(groupId) {
@@ -190,7 +166,7 @@ function renameGroup(groupId) {
 }
 
 function deleteGroup(groupId) {
-  if (!confirm("Delete heading and keep its projects? (They will move to the first heading if available)")) return;
+  if (!confirm("Delete heading and keep its projects?")) return;
   const remaining = groups.filter(g => g.id !== groupId);
   const fallback = remaining[0]?.id;
   projects.forEach(p => {
