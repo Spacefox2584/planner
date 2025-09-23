@@ -1,10 +1,9 @@
-import { Redis } from "@upstash/redis";
+import { createClient } from "@supabase/supabase-js";
 
-// 🔑 Replace these with your actual values from Upstash REST API
-const redis = new Redis({
-  url: "https://welcome-pangolin-5168.upstash.io",   // <-- your KV_REST_API_URL
-  token: "ARjrASQ-OTBkODQwYmEtNDMxYS00NjBiLWIyZGItNjk0OTc5MjdkYTJhQVJRd0FBSW1jREk1T1RGbE1EVXdOMlEyWVRVMFpUTmpZakJqTXpoak9UYzVPRFk1WmpOak9YQXlOVEUyT0E="           // <-- your KV_REST_API_TOKEN
-});
+const supabase = createClient(
+  "https://qbfppzfxwgklsvjogyzy.supabase.co",    // paste your Project URL here
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZnBwemZ4d2drbHN2am9neXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDQyNDUsImV4cCI6MjA3NDEyMDI0NX0.PIiVc0ZPLKS2bvNmWTXynfdey30KhqPUTDkXYMp1qRs"          // paste your anon key here
+);
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -12,16 +11,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { groups, projects } = req.body;
+    const { projects } = req.body;
 
-    if (!groups || !projects) {
-      return res.status(400).json({ error: "Missing groups or projects" });
+    if (!projects || !Array.isArray(projects)) {
+      return res.status(400).json({ error: "Missing projects array" });
     }
 
-    const payload = JSON.stringify({ groups, projects });
-    console.log("Saving to KV:", payload);
+    // Clear old data first
+    await supabase.from("projects").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 
-    await redis.set("planner-data", payload);
+    // Insert new projects
+    const { error } = await supabase.from("projects").insert(projects);
+    if (error) throw error;
 
     return res.status(200).json({ success: true });
   } catch (err) {
