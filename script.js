@@ -2,30 +2,30 @@
    Suite Shell: tab switcher
    ========================= */
 window.showTool = function (tool, btn) {
-  const panes = document.querySelectorAll('.tool-pane');
-  panes.forEach(p => p.classList.add('hidden'));
+  const panes = document.querySelectorAll(".tool-pane");
+  panes.forEach((p) => p.classList.add("hidden"));
   const target = document.getElementById(`tool-${tool}`);
-  if (target) target.classList.remove('hidden');
+  if (target) target.classList.remove("hidden");
 
-  const buttons = document.querySelectorAll('.suite-btn');
-  buttons.forEach(b => b.classList.remove('is-active'));
-  if (btn) btn.classList.add('is-active');
+  const buttons = document.querySelectorAll(".suite-btn");
+  buttons.forEach((b) => b.classList.remove("is-active"));
+  if (btn) btn.classList.add("is-active");
 };
 
 /* =========================
    Theme Toggle
    ========================= */
-(function themeToggle(){
-  const toggle = document.getElementById('themeToggle');
+(function themeToggle() {
+  const toggle = document.getElementById("themeToggle");
   if (!toggle) return;
   const root = document.documentElement;
-  const saved = localStorage.getItem('theme') || 'dark';
-  root.setAttribute('data-theme', saved);
-  toggle.checked = saved === 'dark';
-  toggle.addEventListener('change', () => {
-    const next = toggle.checked ? 'dark' : 'light';
-    root.setAttribute('data-theme', next);
-    localStorage.setItem('theme', next);
+  const saved = localStorage.getItem("theme") || "dark";
+  root.setAttribute("data-theme", saved);
+  toggle.checked = saved === "dark";
+  toggle.addEventListener("change", () => {
+    const next = toggle.checked ? "dark" : "light";
+    root.setAttribute("data-theme", next);
+    localStorage.setItem("theme", next);
   });
 })();
 
@@ -37,11 +37,19 @@ let projects = [];
 
 // UI refs
 let lanesEl;
-let subtasksDiv, subtaskCounter;
-let addGroupBtn, addProjectBtn, addSubtaskBtn, generateSubtasksBtn;
-let approveBtn, cancelBtn, selectAllBtn;
+let addGroupBtn, addProjectBtn;
 
-let pendingSubtasks = [];
+/* ---- Helpers ---- */
+function uuid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0,
+      v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 /* ---- Persistence ---- */
 async function loadState() {
@@ -55,20 +63,48 @@ async function loadState() {
 
     console.log("Loaded groups:", groups);
     console.log("Loaded projects:", projects);
-  } catch (err) {
-    console.error("Load failed:", err);
+
+    // If no groups/projects came back, create fallback ones with UUIDs
     if (groups.length === 0) {
       groups = [
         { id: uuid(), name: "Lane A", position: 0 },
         { id: uuid(), name: "Lane B", position: 1 },
       ];
     }
+    if (projects.length === 0) {
+      projects = [
+        { id: uuid(), name: "Example Project 1", groupId: groups[0].id, completed: 0, subtasks: [] },
+        { id: uuid(), name: "Example Project 2", groupId: groups[1].id, completed: 0, subtasks: [] },
+      ];
+    }
+  } catch (err) {
+    console.error("Load failed:", err);
+    // Hard fallback
+    groups = [
+      { id: uuid(), name: "Lane A", position: 0 },
+      { id: uuid(), name: "Lane B", position: 1 },
+    ];
+    projects = [
+      { id: uuid(), name: "Example Project 1", groupId: groups[0].id, completed: 0, subtasks: [] },
+      { id: uuid(), name: "Example Project 2", groupId: groups[1].id, completed: 0, subtasks: [] },
+    ];
   }
 }
 
 async function saveState() {
   try {
-    const payload = { groups, projects };
+    const payload = {
+      groups,
+      projects: projects.map((p) => ({
+        ...p,
+        groupId: isUuid(p.groupId) ? p.groupId : groups[0]?.id ?? null,
+        completed: Number.isFinite(p.completed) ? p.completed : 0,
+        subtasks: Array.isArray(p.subtasks) ? p.subtasks : [],
+      })),
+    };
+
+    console.log("Saving payload:", payload);
+
     const res = await fetch("/api/savePlanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -84,12 +120,20 @@ async function saveState() {
   }
 }
 
+function isUuid(v) {
+  return (
+    typeof v === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      v
+    )
+  );
+}
+
 /* ---- Actions ---- */
 function onAddGroup() {
   const name = prompt("New lane name?");
   if (!name) return;
-  const position = groups.length;
-  const newGroup = { id: uuid(), name, position };
+  const newGroup = { id: uuid(), name, position: groups.length };
   groups.push(newGroup);
   console.log("Added group:", newGroup);
   render();
@@ -124,15 +168,6 @@ function render() {
   }
   lanesEl.innerHTML = "";
 
-  // Fallback if no groups exist
-  if (groups.length === 0) {
-    groups = [
-      { id: uuid(), name: "Lane A", position: 0 },
-      { id: uuid(), name: "Lane B", position: 1 },
-    ];
-    console.log("Created fallback lanes:", groups);
-  }
-
   const sortedGroups = [...groups].sort(
     (a, b) => (a.position ?? 0) - (b.position ?? 0)
   );
@@ -160,24 +195,9 @@ function render() {
   });
 }
 
-/* ---- Helpers ---- */
-function uuid() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID();
-  }
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0,
-      v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
 /* ---- Boot ---- */
 window.addEventListener("DOMContentLoaded", async () => {
   lanesEl = document.getElementById("lanes");
-  subtasksDiv = document.getElementById("subtasksDiv");
-  subtaskCounter = document.getElementById("subtaskCounter");
-
   addGroupBtn = document.getElementById("addGroup");
   addProjectBtn = document.getElementById("addProject");
 
