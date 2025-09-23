@@ -24,12 +24,11 @@ export default async function handler(req, res) {
   try {
     const supabase = getClient();
 
-    // 1) Load groups (lanes)
+    // Load groups
     let { data: groups, error: gErr } = await supabase
       .from("groups")
       .select("*")
-      .order("position", { ascending: true })
-      .order("name", { ascending: true });
+      .order("position", { ascending: true });
 
     if (gErr) {
       console.error("Supabase groups select error:", gErr);
@@ -38,7 +37,7 @@ export default async function handler(req, res) {
         .json({ error: "Failed to load groups", details: gErr.message });
     }
 
-    // If no groups exist, seed Lane A + Lane B
+    // If nothing exists, seed defaults
     if (!groups || groups.length === 0) {
       const defaults = [
         { name: "Lane A", position: 0 },
@@ -53,9 +52,27 @@ export default async function handler(req, res) {
         });
       }
       groups = ins.data || [];
+
+      // Also seed example projects, one in each lane
+      if (groups.length >= 2) {
+        await supabase.from("projects").insert([
+          {
+            name: "Example Project 1",
+            group_id: groups[0].id,
+            completed: 0,
+            subtasks: [],
+          },
+          {
+            name: "Example Project 2",
+            group_id: groups[1].id,
+            completed: 0,
+            subtasks: [],
+          },
+        ]);
+      }
     }
 
-    // 2) Load projects — don’t assume created_at exists
+    // Load projects
     const { data: projects, error: pErr } = await supabase
       .from("projects")
       .select("*")
@@ -68,7 +85,7 @@ export default async function handler(req, res) {
         .json({ error: "Failed to load projects", details: pErr.message });
     }
 
-    // 3) Normalize payload for client
+    // Normalize
     const normalizedGroups = (groups || []).map((g) => ({
       id: g.id,
       name: g.name,
