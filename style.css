@@ -93,7 +93,7 @@ button {
 }
 button:hover { opacity: 0.9; }
 
-#controls { display: flex; justify-content: center; margin-bottom: 6px; }
+#lanes { display: flex; justify-content: center; margin-bottom: 6px; }
 #whiteboard { display: flex; flex-direction: column; gap: 16px; margin-top: 12px; }
 
 .group {
