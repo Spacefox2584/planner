@@ -12,16 +12,20 @@ export default async function handler(req, res) {
 
   try {
     const { data, error } = await supabase.from("projects").select("*");
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase select error:", error); // 🔎 DEBUG
+      throw error;
+    }
 
-    // Reshape rows to match Planner's expectations
     const projects = data.map(row => ({
-      id: row.id,                  // uuid from DB
+      id: row.id,
       name: row.name,
-      groupId: row.group_id,       // convert to camelCase
+      groupId: row.group_id,
       completed: row.completed,
-      subtasks: []                 // placeholder, since DB doesn't store subtasks yet
+      subtasks: []
     }));
+
+    console.log("Returning projects to frontend:", projects); // 🔎 DEBUG
 
     return res.status(200).json({ projects });
   } catch (err) {
