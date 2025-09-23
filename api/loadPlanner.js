@@ -1,10 +1,15 @@
 import { createClient } from "@supabase/supabase-js";
 
-// 🔒 Replace with your actual project URL + anon key from Supabase
-const supabase = createClient(
-  "https://qbfppzfxwgklsvjogyzy.supabase.co",
-  "YeyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZnBwemZ4d2drbHN2am9neXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDQyNDUsImV4cCI6MjA3NDEyMDI0NX0.PIiVc0ZPLKS2bvNmWTXynfdey30KhqPUTDkXYMp1qRs"
-);
+// Server-side Supabase client using environment variables (Vercel ready)
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+function getClient() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Missing Supabase credentials. Set SUPABASE_URL and SUPABASE_ANON_KEY env vars.");
+  }
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+}
 
 export default async function handler(req, res) {
   if (req.method !== "GET") {
@@ -12,13 +17,21 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { data, error } = await supabase.from("projects").select("*");
-    if (error) throw error;
+    const supabase = getClient();
+    const { data, error } = await supabase
+      .from("projects")
+      .select("*")
+      .order("created_at", { ascending: true });
 
-    const projects = data.map(row => ({
-      id: row.id,
+    if (error) {
+      console.error("Supabase select error:", error);
+      return res.status(500).json({ error: "Supabase select failed", details: error.message });
+    }
+
+    const projects = (data || []).map((row) => ({
+      id: row.id,                               // UUID from DB
       name: row.name,
-      groupId: row.group_id,
+      groupId: row.group_id ?? null,
       completed: row.completed ?? 0,
       subtasks: Array.isArray(row.subtasks) ? row.subtasks : []
     }));
@@ -26,6 +39,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ projects });
   } catch (err) {
     console.error("Load error:", err);
-    return res.status(500).json({ error: "Failed to load planner data" });
+    return res.status(500).json({ error: "Failed to load planner data", details: err.message });
   }
 }
