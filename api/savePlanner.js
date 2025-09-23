@@ -26,8 +26,9 @@ function isUuid(v) {
 }
 
 export default async function handler(req, res) {
-  if (req.method !== "POST")
+  if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
+  }
 
   try {
     const { groups, projects } = req.body || {};
@@ -43,7 +44,7 @@ export default async function handler(req, res) {
         name: String(g.name ?? "").slice(0, 255),
         position: Number.isFinite(g.position) ? g.position : idx,
       };
-      if (isUuid(g.id)) record.id = g.id; // keep UUID if valid
+      if (isUuid(g.id)) record.id = g.id;
       return record;
     });
 
@@ -54,14 +55,14 @@ export default async function handler(req, res) {
         completed: Number.isFinite(p.completed) ? p.completed : 0,
         subtasks: Array.isArray(p.subtasks) ? p.subtasks : [],
       };
-      if (isUuid(p.id)) record.id = p.id; // keep UUID if valid
+      if (isUuid(p.id)) record.id = p.id;
       return record;
     });
 
     const supabase = getClient();
 
     // Replace snapshot (wipe → insert fresh)
-    const delProjects = await supabase.from("projects").delete().neq("id", null);
+    const delProjects = await supabase.from("projects").delete();
     if (delProjects.error) {
       console.error("Supabase delete projects error:", delProjects.error);
       return res.status(500).json({
@@ -70,7 +71,7 @@ export default async function handler(req, res) {
       });
     }
 
-    const delGroups = await supabase.from("groups").delete().neq("id", null);
+    const delGroups = await supabase.from("groups").delete();
     if (delGroups.error) {
       console.error("Supabase delete groups error:", delGroups.error);
       return res.status(500).json({
