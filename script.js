@@ -30,26 +30,55 @@ window.showTool = function (tool, btn) {
 })();
 
 /* =========================
-   Planner State
+   Planner State (persisted)
    ========================= */
-let groups = [];
-let projects = [];
+let groups = [];   // [{id, name, position}]
+let projects = []; // [{id, name, groupId, completed, subtasks:[] }]
 
 // UI refs
-let whiteboard, modal;
-let addGroupBtn, addProjectBtn, addSubtaskBtn, generateSubtasksBtn, closeModalBtn;
+let lanesEl, subtasksDiv, subtaskCounter;
+let addGroupBtn, addProjectBtn, addSubtaskBtn, generateSubtasksBtn;
 let approveBtn, cancelBtn, selectAllBtn;
-let subtasksDiv, subtaskCounter;
 
 let pendingSubtasks = [];
 
-/* ---- Persistence helpers (Supabase via /api) ---- */
+/* ---- Persistence via API ---- */
+async function loadState() {
+  try {
+    const res = await fetch("/api/loadPlanner");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    groups = Array.isArray(data.groups) ? data.groups : [];
+    projects = Array.isArray(data.projects) ? data.projects : [];
+  } catch (err) {
+    console.error("Load failed:", err);
+    // Fallback view only (no persistence)
+    if (groups.length === 0) {
+      groups = [
+        { id: uuid(), name: "Throttle", position: 0 },
+        { id: uuid(), name: "Neutral", position: 1 },
+        { id: uuid(), name: "Send It", position: 2 }
+      ];
+    }
+  }
+}
+
 async function saveState() {
   try {
+    const payload = {
+      groups,
+      projects: projects.map(p => ({
+        ...p,
+        // ensure valid linkage
+        groupId: groups.find(g => g.id === p.groupId)?.id || (groups[0]?.id ?? null),
+        completed: Number.isFinite(p.completed) ? p.completed : 0,
+        subtasks: Array.isArray(p.subtasks) ? p.subtasks : []
+      }))
+    };
     const res = await fetch("/api/savePlanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projects })
+      body: JSON.stringify(payload)
     });
     if (!res.ok) {
       console.error("Save failed:", await res.json());
@@ -61,44 +90,27 @@ async function saveState() {
   }
 }
 
-async function loadState() {
-  try {
-    const res = await fetch("/api/loadPlanner");
-    const data = await res.json();
-    if (Array.isArray(data.projects)) {
-      projects = data.projects;
-    }
-  } catch (err) {
-    console.error("Load failed:", err);
-  }
-}
-
-/* Ensure we have at least two default lanes if none exist */
-function ensureDefaultLanes() {
-  if (groups.length >= 2) return;
-  const t = Date.now();
-  groups = [
-    { id: String(t + 1), name: "Lane A" },
-    { id: String(t + 2), name: "Lane B" }
-  ];
-  projects.forEach(p => { if (!p.groupId) p.groupId = groups[0].id; });
-}
-
-/* ---- Demo UI plumbing (consistent with 2.5/2.6) ---- */
+/* ---- Actions ---- */
 function onAddGroup() {
   const name = prompt("New lane name?");
   if (!name) return;
-  groups.push({ id: cryptoRandomId(), name });
+  const position = groups.length;
+  groups.push({ id: uuid(), name, position });
   render();
+  saveState();
 }
 
 function onAddProject() {
+  if (groups.length === 0) {
+    alert("No lanes exist yet. Add a lane first.");
+    return;
+  }
   const name = prompt("Project name?");
   if (!name) return;
   projects.push({
-    id: cryptoRandomId(),
+    id: uuid(),
     name,
-    groupId: groups[0]?.id || null,
+    groupId: groups[0].id,
     completed: 0,
     subtasks: []
   });
@@ -107,10 +119,12 @@ function onAddProject() {
 }
 
 function onAddSubtask() {
-  const p = projects[0];
-  if (!p) return alert("Make a project first.");
+  const p = pickProject();
+  if (!p) return alert("Create a project first.");
+  const text = prompt("Subtask text?");
+  if (!text) return;
   p.subtasks = p.subtasks || [];
-  p.subtasks.push({ id: cryptoRandomId(), text: `Task ${p.subtasks.length+1}`, done: false });
+  p.subtasks.push({ id: uuid(), text, done: false });
   render();
   saveState();
 }
@@ -119,10 +133,10 @@ async function onGenerateSubtasks() {
   generateSubtasksBtn.disabled = true;
   generateSubtasksBtn.textContent = "Generating…";
   try {
-    // placeholder generator – keep behavior identical to v2.6
-    pendingSubtasks = Array.from({length:5}).map((_,i)=> ({
-      id: cryptoRandomId(),
-      text: `Suggested task ${i+1}`
+    // Placeholder suggestions (keep behavior like prior versions)
+    pendingSubtasks = Array.from({ length: 5 }).map((_, i) => ({
+      id: uuid(),
+      text: `Suggested task ${i + 1}`
     }));
     renderPendingSubtasks();
   } catch (err) {
@@ -131,6 +145,33 @@ async function onGenerateSubtasks() {
     generateSubtasksBtn.disabled = false;
     generateSubtasksBtn.textContent = "✨ Generate Example Subtasks";
   }
+}
+
+function acceptSelectedSubtasks() {
+  const p = pickProject();
+  if (!p) return alert("Create a project first.");
+  const checks = subtasksDiv.querySelectorAll("input[type=checkbox]");
+  const toAdd = [];
+  checks.forEach((cb, i) => { if (cb.checked) toAdd.push(pendingSubtasks[i]); });
+  p.subtasks = p.subtasks || [];
+  toAdd.forEach(t => p.subtasks.push({ id: uuid(), text: t.text, done: false }));
+  pendingSubtasks = [];
+  renderPendingSubtasks();
+  render();
+  saveState();
+}
+
+function toggleSelectAll() {
+  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
+  const allChecked = [...checkboxes].every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+  selectAllBtn.textContent = allChecked ? "☑ Select All" : "☐ Deselect All";
+}
+
+/* ---- Helpers ---- */
+function pickProject() {
+  // For now, use the first project; expand later with a proper selector
+  return projects[0];
 }
 
 function renderPendingSubtasks() {
@@ -150,34 +191,14 @@ function renderPendingSubtasks() {
   });
 }
 
-function acceptSelectedSubtasks() {
-  const checks = subtasksDiv.querySelectorAll("input[type=checkbox]");
-  const toAdd = [];
-  checks.forEach((cb) => {
-    if (cb.checked) {
-      const idx = Number(cb.dataset.i);
-      const t = pendingSubtasks[idx];
-      if (t) toAdd.push(t);
-    }
-  });
-  if (!projects.length) return alert("Create a project first.");
-  const p = projects[0];
-  p.subtasks = p.subtasks || [];
-  toAdd.forEach(t => p.subtasks.push({ id: cryptoRandomId(), text: t.text, done: false }));
-  pendingSubtasks = [];
-  renderPendingSubtasks();
-  render();
-  saveState();
-}
-
-/* ---- Render ---- */
 function render() {
-  const lanes = document.getElementById("lanes");
-  if (!lanes) return;
-  lanes.innerHTML = "";
-  ensureDefaultLanes();
+  if (!lanesEl) return;
+  lanesEl.innerHTML = "";
 
-  groups.forEach(g => {
+  // Sort lanes by position
+  const sortedGroups = [...groups].sort((a,b) => (a.position ?? 0) - (b.position ?? 0));
+
+  sortedGroups.forEach(g => {
     const col = document.createElement('div');
     col.className = 'lane';
     const title = document.createElement('h3');
@@ -185,23 +206,18 @@ function render() {
     col.appendChild(title);
 
     const list = document.createElement('ul');
-    projects.filter(p => p.groupId === g.id).forEach(p => {
-      const li = document.createElement('li');
-      li.textContent = p.name;
-      list.appendChild(li);
-    });
+    projects
+      .filter(p => p.groupId === g.id)
+      .forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'project-item';
+        li.textContent = p.name;
+        list.appendChild(li);
+      });
     col.appendChild(list);
 
-    lanes.appendChild(col);
+    lanesEl.appendChild(col);
   });
-}
-
-/* ---- Utilities ---- */
-function toggleSelectAll() {
-  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
-  const allChecked = [...checkboxes].every(cb => cb.checked);
-  checkboxes.forEach(cb => cb.checked = !allChecked);
-  selectAllBtn.textContent = allChecked ? "☑ Select All" : "☐ Deselect All";
 }
 
 function escapeHtml(str) {
@@ -210,17 +226,18 @@ function escapeHtml(str) {
   }[s]));
 }
 
-function cryptoRandomId() {
-  // Browser-safe UUID-ish id for client-side only
-  if (crypto && crypto.randomUUID) return crypto.randomUUID();
-  return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+function uuid() {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+  // RFC4122-ish fallback
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
+    const r = (Math.random() * 16) | 0, v = c === "x" ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 /* ---- Boot ---- */
 window.addEventListener("DOMContentLoaded", async () => {
-  whiteboard = document.getElementById("whiteboard");
-  modal = document.getElementById("modal");
-
+  lanesEl = document.getElementById("lanes");
   subtasksDiv = document.getElementById("subtasksDiv");
   subtaskCounter = document.getElementById("subtaskCounter");
 
@@ -228,23 +245,18 @@ window.addEventListener("DOMContentLoaded", async () => {
   addProjectBtn = document.getElementById("addProject");
   addSubtaskBtn = document.getElementById("addSubtask");
   generateSubtasksBtn = document.getElementById("generateSubtasks");
-  closeModalBtn = document.getElementById("closeModal");
-
   approveBtn = document.getElementById("approveBtn");
   cancelBtn = document.getElementById("cancelBtn");
   selectAllBtn = document.getElementById("selectAllBtn");
-
-  if (!whiteboard) return;
 
   addGroupBtn?.addEventListener("click", onAddGroup);
   addProjectBtn?.addEventListener("click", onAddProject);
   addSubtaskBtn?.addEventListener("click", onAddSubtask);
   generateSubtasksBtn?.addEventListener("click", onGenerateSubtasks);
   approveBtn?.addEventListener("click", acceptSelectedSubtasks);
-  selectAllBtn?.addEventListener("click", toggleSelectAll);
   cancelBtn?.addEventListener("click", () => { pendingSubtasks = []; renderPendingSubtasks(); });
+  selectAllBtn?.addEventListener("click", toggleSelectAll);
 
-  await loadState();     // ← pulls existing projects from Supabase
-  ensureDefaultLanes();  // ← keep UI sane even if DB empty
+  await loadState();
   render();
 });
