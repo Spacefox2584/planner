@@ -1,255 +1,483 @@
-// ----------------------------
-// Planner Tool – v2.4 (Supabase Persistence)
-// ----------------------------
+/* =========================
+   Suite Shell: tab switcher
+   ========================= */
+window.showTool = function (tool, btn) {
+  const panes = document.querySelectorAll('.tool-pane');
+  panes.forEach(p => p.classList.add('hidden'));
+  const target = document.getElementById(`tool-${tool}`);
+  if (target) target.classList.remove('hidden');
 
-// Global State
-let projects = [];
-let groups = [
-  { id: Date.now(), name: "Lane A" },
-  { id: Date.now() + 1, name: "Lane B" }
-];
+  const buttons = document.querySelectorAll('.suite-btn');
+  buttons.forEach(b => b.classList.remove('is-active'));
+  if (btn) btn.classList.add('is-active');
+};
 
-// ----------------------------
-// Load from Supabase (via API)
-// ----------------------------
-async function loadState() {
-  try {
-    const res = await fetch("/api/loadPlanner");
-    const data = await res.json();
-
-    if (data.projects) {
-      projects = data.projects;
-      console.log("Loaded projects into state:", projects);
-      renderProjects();
-    } else {
-      console.warn("No projects returned from API, using defaults");
-      renderProjects();
-    }
-  } catch (err) {
-    console.error("Load state failed:", err);
-    renderProjects(); // fallback render
-  }
+/* =========================
+   Theme Toggle
+   ========================= */
+function toggleTheme() {
+  const body = document.body;
+  const current = body.getAttribute("data-theme") || "light";
+  const newTheme = current === "light" ? "dark" : "light";
+  body.setAttribute("data-theme", newTheme);
+  localStorage.setItem("suite-theme", newTheme);
 }
 
-// ----------------------------
-// Save to Supabase (via API)
-// ----------------------------
+// Apply saved theme
+document.addEventListener("DOMContentLoaded", () => {
+  const saved = localStorage.getItem("suite-theme") || "light";
+  document.body.setAttribute("data-theme", saved);
+  showTool('planner', document.querySelector('.suite-btn[data-tool="planner"]'));
+});
+
+/* ==================================
+   Planner v2.4 (Supabase persistence)
+   ================================== */
+
+let groups = [];
+let projects = [];
+let currentProject = null;
+let pendingSubtasks = [];
+
+let whiteboard, modal, modalTitle, subtasksDiv, subtaskCounter;
+let addGroupBtn, addProjectBtn, addSubtaskBtn, generateSubtasksBtn, closeModalBtn;
+let approveBtn, cancelBtn, selectAllBtn;
+
+/* ---- Persistence helpers (Supabase via /api) ---- */
 async function saveState() {
   try {
+    // Only save projects (current Supabase schema)
     const res = await fetch("/api/savePlanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ projects })
     });
-
     const data = await res.json();
-    if (res.ok) {
-      console.log("Save success:", data);
+    if (!res.ok) {
+      console.error("Save failed:", data?.error || data);
     } else {
-      console.error("Save failed:", data);
+      console.log("Save success.");
     }
   } catch (err) {
-    console.error("Save state failed:", err);
+    console.error("Save failed:", err);
   }
 }
 
-// ----------------------------
-// Utility Helpers
-// ----------------------------
-function generateId() {
-  return Date.now() + Math.floor(Math.random() * 1000);
+async function loadState() {
+  try {
+    const res = await fetch("/api/loadPlanner");
+    const data = await res.json();
+    // Supabase endpoint returns { projects }
+    if (Array.isArray(data.projects)) {
+      projects = data.projects.map(p => ({
+        // Ensure the shape the UI expects
+        id: p.id ?? Date.now(),
+        name: p.name ?? "Untitled",
+        groupId: typeof p.groupId !== "undefined" ? p.groupId : (p.group_id ?? null),
+        subtasks: Array.isArray(p.subtasks) ? p.subtasks : [],
+        completed: typeof p.completed === "number" ? p.completed : 0
+      }));
+      console.log("Loaded projects from Supabase:", projects);
+    } else {
+      console.log("No projects in DB yet.");
+    }
+  } catch (err) {
+    console.error("Load failed:", err);
+  }
 }
 
-function findGroup(id) {
-  return groups.find(g => g.id === id);
+/* Ensure we always have visible lanes, even if groups weren’t persisted */
+function ensureGroups() {
+  // If groups already exist, keep them
+  if (groups.length) return;
+
+  // Try to infer from project.groupId values
+  const ids = [...new Set(projects.map(p => p.groupId).filter(Boolean))];
+
+  if (ids.length >= 2) {
+    groups = [
+      { id: ids[0], name: "Lane A" },
+      { id: ids[1], name: "Lane B" }
+    ];
+  } else if (ids.length === 1) {
+    groups = [
+      { id: ids[0], name: "Lane A" },
+      { id: Date.now() + 2, name: "Lane B" }
+    ];
+    // Put any projects lacking groupId into first lane
+    projects.forEach(p => { if (!p.groupId) p.groupId = groups[0].id; });
+  } else {
+    // Nothing to infer → seed defaults and move existing projects to first lane
+    const t = Date.now();
+    groups = [
+      { id: t + 1, name: "Lane A" },
+      { id: t + 2, name: "Lane B" }
+    ];
+    projects.forEach(p => { if (!p.groupId) p.groupId = groups[0].id; });
+  }
 }
 
-// ----------------------------
-// Project Handling
-// ----------------------------
-function addProject(name, groupId) {
-  const project = {
-    id: generateId(),
-    name,
-    groupId,
-    subtasks: [],
-    completed: 0
-  };
+window.addEventListener("DOMContentLoaded", async () => {
+  whiteboard = document.getElementById("whiteboard");
+  modal = document.getElementById("modal");
+  modalTitle = document.getElementById("modalTitle");
+  subtasksDiv = document.getElementById("subtasks");
+  subtaskCounter = document.getElementById("subtaskCounter");
 
-  projects.push(project);
-  renderProjects();
+  addGroupBtn = document.getElementById("addGroup");
+  addProjectBtn = document.getElementById("addProject");
+  addSubtaskBtn = document.getElementById("addSubtask");
+  generateSubtasksBtn = document.getElementById("generateSubtasks");
+  closeModalBtn = document.getElementById("closeModal");
+
+  approveBtn = document.getElementById("approveBtn");
+  cancelBtn = document.getElementById("cancelBtn");
+  selectAllBtn = document.getElementById("selectAllBtn");
+
+  if (!whiteboard) return;
+
+  addGroupBtn.addEventListener("click", onAddGroup);
+  addProjectBtn.addEventListener("click", onAddProject);
+  addSubtaskBtn.addEventListener("click", onAddSubtask);
+  generateSubtasksBtn.addEventListener("click", onGenerateSubtasks);
+  closeModalBtn.addEventListener("click", () => modal.classList.add("hidden"));
+  approveBtn.addEventListener("click", approvePendingSubtasks);
+  cancelBtn.addEventListener("click", cancelPendingSubtasks);
+  selectAllBtn.addEventListener("click", toggleSelectAll);
+
+  modal.classList.add("hidden");
+
+  // Load latest from Supabase
+  await loadState();
+
+  // If both groups & projects are empty, seed defaults
+  if (!groups.length && !projects.length) {
+    const t = Date.now();
+    groups = [
+      { id: t + 1, name: "Lane A" },
+      { id: t + 2, name: "Lane B" }
+    ];
+    projects = [
+      { id: t + 11, name: "ThrottleBoss Website", groupId: groups[0].id, subtasks: [], completed: 0 },
+      { id: t + 12, name: "Supplier Outreach",     groupId: groups[1].id, subtasks: [], completed: 0 }
+    ];
+  }
+
+  // Make sure lanes exist if projects came from DB without lanes
+  ensureGroups();
+
+  renderGroups();
+});
+
+/* ---- Groups ---- */
+function onAddGroup() {
+  const name = prompt("Heading name:");
+  if (!name) return;
+  groups.push({ id: Date.now(), name });
+  renderGroups();
+  // Groups aren’t persisted yet; optional future: save groups in DB
+  saveState(); // still call so projects re-save if positions change later
+}
+
+function renameGroup(groupId) {
+  const g = groups.find(x => x.id === groupId);
+  if (!g) return;
+  const name = prompt("Rename heading:", g.name);
+  if (!name) return;
+  g.name = name;
+  renderGroups();
   saveState();
 }
 
-function deleteProject(id) {
-  projects = projects.filter(p => p.id !== id);
-  renderProjects();
-  saveState();
-}
-
-function updateCompletion(projectId) {
-  const project = projects.find(p => p.id === projectId);
-  if (!project) return;
-
-  const total = project.subtasks.length;
-  const done = project.subtasks.filter(s => s.done).length;
-  project.completed = total > 0 ? Math.round((done / total) * 100) : 0;
-
-  renderProjects();
-  saveState();
-}
-
-function addSubtask(projectId, name) {
-  const project = projects.find(p => p.id === projectId);
-  if (!project) return;
-
-  project.subtasks.push({ id: generateId(), name, done: false });
-  updateCompletion(projectId);
-}
-
-function toggleSubtask(projectId, subtaskId) {
-  const project = projects.find(p => p.id === projectId);
-  if (!project) return;
-
-  const subtask = project.subtasks.find(s => s.id === subtaskId);
-  if (subtask) subtask.done = !subtask.done;
-
-  updateCompletion(projectId);
-}
-
-// ----------------------------
-// Rendering
-// ----------------------------
-function renderProjects() {
-  groups.forEach(group => {
-    const container = document.getElementById(`group-${group.id}`);
-    if (!container) return;
-
-    container.innerHTML = "";
-    projects
-      .filter(p => p.groupId == group.id)
-      .forEach(project => {
-        const div = document.createElement("div");
-        div.className = "project-card";
-
-        const title = document.createElement("h3");
-        title.textContent = project.name;
-        div.appendChild(title);
-
-        const progress = document.createElement("p");
-        progress.textContent = `${project.completed}% complete`;
-        div.appendChild(progress);
-
-        // Subtasks list
-        const ul = document.createElement("ul");
-        project.subtasks.forEach(st => {
-          const li = document.createElement("li");
-          const checkbox = document.createElement("input");
-          checkbox.type = "checkbox";
-          checkbox.checked = st.done;
-          checkbox.addEventListener("change", () =>
-            toggleSubtask(project.id, st.id)
-          );
-          li.appendChild(checkbox);
-          li.appendChild(document.createTextNode(st.name));
-          ul.appendChild(li);
-        });
-        div.appendChild(ul);
-
-        // Add subtask button
-        const addSubtaskBtn = document.createElement("button");
-        addSubtaskBtn.textContent = "+ Subtask";
-        addSubtaskBtn.addEventListener("click", () => {
-          const name = prompt("Subtask name:");
-          if (name) addSubtask(project.id, name);
-        });
-        div.appendChild(addSubtaskBtn);
-
-        // Delete button
-        const deleteBtn = document.createElement("button");
-        deleteBtn.textContent = "Delete";
-        deleteBtn.addEventListener("click", () => deleteProject(project.id));
-        div.appendChild(deleteBtn);
-
-        container.appendChild(div);
-      });
+function deleteGroup(groupId) {
+  if (!confirm("Delete heading and keep its projects? (They will move to the first heading if available)")) return;
+  const remaining = groups.filter(g => g.id !== groupId);
+  const fallback = remaining[0]?.id;
+  projects.forEach(p => {
+    if (p.groupId === groupId && fallback) p.groupId = fallback;
   });
+  groups = remaining;
+  renderGroups();
+  saveState();
 }
 
-// ----------------------------
-// Group Rendering
-// ----------------------------
 function renderGroups() {
-  const groupContainer = document.getElementById("groups");
-  if (!groupContainer) return;
-
-  groupContainer.innerHTML = "";
+  whiteboard.innerHTML = "";
   groups.forEach(group => {
-    const col = document.createElement("div");
-    col.className = "group";
-    col.id = `group-${group.id}`;
+    const g = document.createElement("div");
+    g.className = "group";
+    g.innerHTML = `
+      <div class="group-header">
+        <div class="group-title">${escapeHtml(group.name)}</div>
+        <div class="group-actions">
+          <button onclick="renameGroup(${group.id})">✎ Rename</button>
+          <button onclick="deleteGroup(${group.id})">🗑 Delete</button>
+        </div>
+      </div>
+      <div id="group-${group.id}" class="project-row"></div>
+    `;
+    whiteboard.appendChild(g);
 
-    const header = document.createElement("h2");
-    header.textContent = group.name;
-    col.appendChild(header);
-
-    const addProjectBtn = document.createElement("button");
-    addProjectBtn.textContent = "+ Project";
-    addProjectBtn.addEventListener("click", () => {
-      const name = prompt("Project name:");
-      if (name) addProject(name, group.id);
-    });
-    col.appendChild(addProjectBtn);
-
-    groupContainer.appendChild(col);
-  });
-
-  renderProjects();
-}
-
-// ----------------------------
-// Drag and Drop (using SortableJS)
-// ----------------------------
-function setupDragAndDrop() {
-  groups.forEach(group => {
-    const el = document.getElementById(`group-${group.id}`);
-    if (!el) return;
-
-    new Sortable(el, {
-      group: "shared",
+    const listEl = g.querySelector(".project-row");
+    Sortable.create(listEl, {
+      group: "projects",
       animation: 150,
-      onEnd: evt => {
-        const item = evt.item;
-        const projectName = item.querySelector("h3").textContent;
-        const project = projects.find(p => p.name === projectName);
-        if (project) {
-          const newGroupId = parseInt(evt.to.id.replace("group-", ""), 10);
-          project.groupId = newGroupId;
-          saveState();
-        }
+      onAdd: evt => {
+        const projId = Number(evt.item.dataset.pid);
+        const p = projects.find(x => x.id === projId);
+        if (p) p.groupId = group.id;
+        saveState();
       }
     });
   });
+
+  renderProjects(true);
 }
 
-// ----------------------------
-// Theme Toggle
-// ----------------------------
-function setupThemeToggle() {
-  const toggleBtn = document.getElementById("theme-toggle");
-  if (!toggleBtn) return;
+/* ---- Projects ---- */
+function onAddProject() {
+  if (!groups.length) {
+    alert("Add a heading first!");
+    return;
+  }
+  const name = prompt("Project name:");
+  if (!name) return;
+  projects.push({
+    id: Date.now(),
+    name,
+    groupId: groups[0].id,
+    subtasks: [],
+    completed: 0
+  });
+  renderProjects(true);
+  saveState();
+}
 
-  toggleBtn.addEventListener("click", () => {
-    document.body.classList.toggle("dark-theme");
+function renameProject(pid) {
+  const p = projects.find(x => x.id === pid);
+  if (!p) return;
+  const name = prompt("Rename project:", p.name);
+  if (!name) return;
+  p.name = name;
+  renderProjects();
+  saveState();
+}
+
+function deleteProject(pid) {
+  if (!confirm("Delete this project?")) return;
+  projects = projects.filter(p => p.id !== pid);
+  renderProjects(true);
+  saveState();
+}
+
+function renderProjects(clearContainers = false) {
+  if (clearContainers) {
+    groups.forEach(g => {
+      const container = document.getElementById(`group-${g.id}`);
+      if (container) container.innerHTML = "";
+    });
+  }
+
+  projects.forEach(p => {
+    const container = document.getElementById(`group-${p.groupId}`);
+    if (!container) return;
+
+    let card = document.getElementById(`project-${p.id}`);
+    const percent = Math.round(progressPercent(p));
+    if (!card) {
+      card = document.createElement("div");
+      card.className = "project";
+      card.id = `project-${p.id}`;
+      card.dataset.pid = String(p.id);
+      card.innerHTML = `
+        <div class="fill" style="height:${percent}%;"></div>
+        <div class="label" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
+        <div class="percent">${percent}%</div>
+        <div class="p-actions">
+          <button class="icon-btn" title="Rename" onclick="event.stopPropagation(); renameProject(${p.id});">✎</button>
+          <button class="icon-btn" title="Delete" onclick="event.stopPropagation(); deleteProject(${p.id});">🗑</button>
+        </div>
+      `;
+      card.onclick = () => openProject(p.id);
+      container.appendChild(card);
+    } else {
+      card.querySelector(".label").textContent = p.name;
+      card.querySelector(".label").setAttribute("title", p.name);
+      card.querySelector(".percent").textContent = `${percent}%`;
+      card.querySelector(".fill").style.height = `${percent}%`;
+      if (!card.parentElement || card.parentElement.id !== `group-${p.groupId}`) {
+        container.appendChild(card);
+      }
+    }
   });
 }
 
-// ----------------------------
-// Init
-// ----------------------------
-document.addEventListener("DOMContentLoaded", () => {
-  renderGroups();
-  setupDragAndDrop();
-  setupThemeToggle();
-  loadState();
-});
+function progressPercent(project) {
+  return project.subtasks.length ? (project.completed / project.subtasks.length) * 100 : 0;
+}
+
+/* ---- Subtasks ---- */
+function openProject(id) {
+  currentProject = projects.find(p => p.id === id);
+  modalTitle.textContent = currentProject?.name || "Project";
+  renderSubtasks();
+  modal.classList.remove("hidden");
+}
+
+function onAddSubtask() {
+  if (!currentProject) return;
+  const name = prompt("Subtask name:");
+  if (!name) return;
+  currentProject.subtasks.push({ name, done: false, notes: "" });
+  renderSubtasks();
+  saveState();
+}
+
+function renderSubtasks() {
+  if (!currentProject) return;
+  subtasksDiv.innerHTML = "";
+  subtaskCounter.textContent = "";
+  currentProject.completed = 0;
+
+  currentProject.subtasks.forEach((t, i) => {
+    const row = document.createElement("div");
+    row.className = `task-row ${t.done ? "done" : ""}`;
+
+    const span = document.createElement("span");
+    span.className = "task-text";
+    span.textContent = t.name;
+    span.ondblclick = () => {
+      const newName = prompt("Edit task:", t.name);
+      if (newName) {
+        t.name = newName;
+        renderSubtasks();
+        saveState();
+      }
+    };
+    row.appendChild(span);
+
+    const noteBtn = document.createElement("button");
+    noteBtn.className = "note-btn";
+    noteBtn.title = "Notes";
+    noteBtn.textContent = "📝";
+    noteBtn.onclick = (e) => {
+      e.stopPropagation();
+      const note = prompt("Notes:", t.notes || "");
+      if (note !== null) t.notes = note;
+      saveState();
+    };
+    row.appendChild(noteBtn);
+
+    const del = document.createElement("span");
+    del.className = "delete-btn";
+    del.title = "Delete subtask";
+    del.textContent = "×";
+    del.onclick = (e) => {
+      e.stopPropagation();
+      currentProject.subtasks.splice(i, 1);
+      renderSubtasks();
+      saveState();
+    };
+    row.appendChild(del);
+
+    row.onclick = () => {
+      t.done = !t.done;
+      renderSubtasks();
+      saveState();
+    };
+
+    subtasksDiv.appendChild(row);
+    if (t.done) currentProject.completed++;
+  });
+
+  renderProjects();
+}
+
+/* ---- AI Subtask Generation ---- */
+async function onGenerateSubtasks() {
+  if (!currentProject) return;
+  generateSubtasksBtn.disabled = true;
+  generateSubtasksBtn.textContent = "… Generating";
+  try {
+    const res = await fetch("/api/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectName: currentProject.name })
+    });
+    const data = await res.json();
+    if (!res.ok || data?.error) throw new Error(data?.error || "Server error");
+
+    let lines = Array.isArray(data.subtasks) ? data.subtasks : String(data.subtasks || "").split("\n");
+    let cleaned = lines
+      .map(t => t.replace(/^\s*\d+[\.\)]\s*/, "").replace(/^\s*[-*]\s*/, "").trim())
+      .filter(t => t && !/^sure|here are|of course|okay/i.test(t));
+
+    pendingSubtasks = cleaned.slice(0, 20);
+    renderPendingSubtasks();
+  } catch (err) {
+    alert(`Generate failed: ${err.message}`);
+  } finally {
+    generateSubtasksBtn.disabled = false;
+    generateSubtasksBtn.textContent = "✨ Generate Example Subtasks";
+  }
+}
+
+function renderPendingSubtasks() {
+  subtasksDiv.innerHTML = "";
+  subtaskCounter.textContent = `${pendingSubtasks.length} suggestions`;
+  pendingSubtasks.forEach((task, i) => {
+    const row = document.createElement("div");
+    row.className = "task-row pending-task";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.dataset.index = i;
+
+    const label = document.createElement("span");
+    label.textContent = task;
+
+    row.appendChild(cb);
+    row.appendChild(label);
+
+    row.onclick = (e) => {
+      if (e.target.tagName !== "INPUT") cb.checked = !cb.checked;
+    };
+
+    subtasksDiv.appendChild(row);
+  });
+
+  document.getElementById("approvalControls").classList.remove("hidden");
+}
+
+function approvePendingSubtasks() {
+  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
+  checkboxes.forEach(cb => {
+    if (cb.checked) {
+      currentProject.subtasks.push({ name: pendingSubtasks[cb.dataset.index], done: false, notes: "" });
+    }
+  });
+  pendingSubtasks = [];
+  document.getElementById("approvalControls").classList.add("hidden");
+  renderSubtasks();
+  saveState();
+}
+
+function cancelPendingSubtasks() {
+  pendingSubtasks = [];
+  document.getElementById("approvalControls").classList.add("hidden");
+  renderSubtasks();
+}
+
+/* ---- Utilities ---- */
+function toggleSelectAll() {
+  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
+  const allChecked = [...checkboxes].every(cb => cb.checked);
+  checkboxes.forEach(cb => cb.checked = !allChecked);
+  selectAllBtn.textContent = allChecked ? "☑ Select All" : "☐ Deselect All";
+}
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>\"']/g, s => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[s]));
+}
