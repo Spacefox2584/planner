@@ -30,32 +30,37 @@ window.showTool = function (tool, btn) {
 })();
 
 /* =========================
-   Planner State (persisted)
+   Planner State
    ========================= */
-let groups = [];   // [{id, name, position}]
-let projects = []; // [{id, name, groupId, completed, subtasks:[] }]
+let groups = [];
+let projects = [];
 
 // UI refs
-let lanesEl, subtasksDiv, subtaskCounter;
+let lanesEl;
+let subtasksDiv, subtaskCounter;
 let addGroupBtn, addProjectBtn, addSubtaskBtn, generateSubtasksBtn;
 let approveBtn, cancelBtn, selectAllBtn;
 
 let pendingSubtasks = [];
 
-/* ---- Persistence via API ---- */
+/* ---- Persistence ---- */
 async function loadState() {
   try {
     const res = await fetch("/api/loadPlanner");
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
+
     groups = Array.isArray(data.groups) ? data.groups : [];
     projects = Array.isArray(data.projects) ? data.projects : [];
+
+    console.log("Loaded groups:", groups);
+    console.log("Loaded projects:", projects);
   } catch (err) {
     console.error("Load failed:", err);
     if (groups.length === 0) {
       groups = [
         { id: uuid(), name: "Lane A", position: 0 },
-        { id: uuid(), name: "Lane B", position: 1 }
+        { id: uuid(), name: "Lane B", position: 1 },
       ];
     }
   }
@@ -63,22 +68,12 @@ async function loadState() {
 
 async function saveState() {
   try {
-    const payload = {
-      groups,
-      projects: projects.map(p => ({
-        ...p,
-        groupId: groups.find(g => g.id === p.groupId)?.id || (groups[0]?.id ?? null),
-        completed: Number.isFinite(p.completed) ? p.completed : 0,
-        subtasks: Array.isArray(p.subtasks) ? p.subtasks : []
-      }))
-    };
-
+    const payload = { groups, projects };
     const res = await fetch("/api/savePlanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)   // 👈 sends groups + projects properly
+      body: JSON.stringify(payload),
     });
-
     if (!res.ok) {
       console.error("Save failed:", await res.json());
     } else {
@@ -94,7 +89,9 @@ function onAddGroup() {
   const name = prompt("New lane name?");
   if (!name) return;
   const position = groups.length;
-  groups.push({ id: uuid(), name, position });
+  const newGroup = { id: uuid(), name, position };
+  groups.push(newGroup);
+  console.log("Added group:", newGroup);
   render();
   saveState();
 }
@@ -106,107 +103,54 @@ function onAddProject() {
   }
   const name = prompt("Project name?");
   if (!name) return;
-  projects.push({
+  const newProject = {
     id: uuid(),
     name,
     groupId: groups[0].id,
     completed: 0,
-    subtasks: []
-  });
+    subtasks: [],
+  };
+  projects.push(newProject);
+  console.log("Added project:", newProject);
   render();
   saveState();
 }
 
-function onAddSubtask() {
-  const p = pickProject();
-  if (!p) return alert("Create a project first.");
-  const text = prompt("Subtask text?");
-  if (!text) return;
-  p.subtasks = p.subtasks || [];
-  p.subtasks.push({ id: uuid(), text, done: false });
-  render();
-  saveState();
-}
-
-async function onGenerateSubtasks() {
-  generateSubtasksBtn.disabled = true;
-  generateSubtasksBtn.textContent = "Generating…";
-  try {
-    pendingSubtasks = Array.from({ length: 5 }).map((_, i) => ({
-      id: uuid(),
-      text: `Suggested task ${i + 1}`
-    }));
-    renderPendingSubtasks();
-  } catch (err) {
-    alert(`Generate failed: ${err.message}`);
-  } finally {
-    generateSubtasksBtn.disabled = false;
-    generateSubtasksBtn.textContent = "✨ Generate Example Subtasks";
-  }
-}
-
-function acceptSelectedSubtasks() {
-  const p = pickProject();
-  if (!p) return alert("Create a project first.");
-  const checks = subtasksDiv.querySelectorAll("input[type=checkbox]");
-  const toAdd = [];
-  checks.forEach((cb, i) => { if (cb.checked) toAdd.push(pendingSubtasks[i]); });
-  p.subtasks = p.subtasks || [];
-  toAdd.forEach(t => p.subtasks.push({ id: uuid(), text: t.text, done: false }));
-  pendingSubtasks = [];
-  renderPendingSubtasks();
-  render();
-  saveState();
-}
-
-function toggleSelectAll() {
-  const checkboxes = subtasksDiv.querySelectorAll("input[type=checkbox]");
-  const allChecked = [...checkboxes].every(cb => cb.checked);
-  checkboxes.forEach(cb => cb.checked = !allChecked);
-  selectAllBtn.textContent = allChecked ? "☑ Select All" : "☐ Deselect All";
-}
-
-/* ---- Helpers ---- */
-function pickProject() {
-  return projects[0]; // just grab the first project for now
-}
-
-function renderPendingSubtasks() {
-  if (!subtasksDiv) return;
-  subtasksDiv.innerHTML = "";
-  subtaskCounter.textContent = `${pendingSubtasks.length} suggestions`;
-  pendingSubtasks.forEach((task, i) => {
-    const row = document.createElement("div");
-    row.className = "task-row pending-task";
-    row.innerHTML = `
-      <label>
-        <input type="checkbox" data-i="${i}" />
-        <span>${escapeHtml(task.text)}</span>
-      </label>
-    `;
-    subtasksDiv.appendChild(row);
-  });
-}
-
+/* ---- Rendering ---- */
 function render() {
-  if (!lanesEl) return;
+  if (!lanesEl) {
+    console.error("No #lanes element found in DOM");
+    return;
+  }
   lanesEl.innerHTML = "";
 
-  const sortedGroups = [...groups].sort((a,b) => (a.position ?? 0) - (b.position ?? 0));
+  // Fallback if no groups exist
+  if (groups.length === 0) {
+    groups = [
+      { id: uuid(), name: "Lane A", position: 0 },
+      { id: uuid(), name: "Lane B", position: 1 },
+    ];
+    console.log("Created fallback lanes:", groups);
+  }
 
-  sortedGroups.forEach(g => {
-    const col = document.createElement('div');
-    col.className = 'lane';
-    const title = document.createElement('h3');
+  const sortedGroups = [...groups].sort(
+    (a, b) => (a.position ?? 0) - (b.position ?? 0)
+  );
+
+  sortedGroups.forEach((g) => {
+    const col = document.createElement("div");
+    col.className = "lane";
+
+    const title = document.createElement("h3");
     title.textContent = g.name;
     col.appendChild(title);
 
-    const list = document.createElement('ul');
+    const list = document.createElement("ul");
     projects
-      .filter(p => p.groupId === g.id)
-      .forEach(p => {
-        const li = document.createElement('li');
-        li.className = 'project-item';
+      .filter((p) => p.groupId === g.id)
+      .forEach((p) => {
+        const li = document.createElement("li");
+        li.className = "project-item";
         li.textContent = p.name;
         list.appendChild(li);
       });
@@ -216,16 +160,14 @@ function render() {
   });
 }
 
-function escapeHtml(str) {
-  return String(str).replace(/[&<>\"']/g, s => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  }[s]));
-}
-
+/* ---- Helpers ---- */
 function uuid() {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
-    const r = (Math.random() * 16) | 0, v = c === "x" ? r : (r & 0x3 | 0x8);
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0,
+      v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
@@ -238,19 +180,9 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   addGroupBtn = document.getElementById("addGroup");
   addProjectBtn = document.getElementById("addProject");
-  addSubtaskBtn = document.getElementById("addSubtask");
-  generateSubtasksBtn = document.getElementById("generateSubtasks");
-  approveBtn = document.getElementById("approveBtn");
-  cancelBtn = document.getElementById("cancelBtn");
-  selectAllBtn = document.getElementById("selectAllBtn");
 
   addGroupBtn?.addEventListener("click", onAddGroup);
   addProjectBtn?.addEventListener("click", onAddProject);
-  addSubtaskBtn?.addEventListener("click", onAddSubtask);
-  generateSubtasksBtn?.addEventListener("click", onGenerateSubtasks);
-  approveBtn?.addEventListener("click", acceptSelectedSubtasks);
-  cancelBtn?.addEventListener("click", () => { pendingSubtasks = []; renderPendingSubtasks(); });
-  selectAllBtn?.addEventListener("click", toggleSelectAll);
 
   await loadState();
   render();
