@@ -38,7 +38,7 @@ export default async function handler(req, res) {
         .json({ error: "Invalid payload: 'groups' and 'projects' must be arrays" });
     }
 
-    // Normalize records
+    // Normalize groups + projects
     const gRecords = groups.map((g, idx) => {
       const record = {
         name: String(g.name ?? "").slice(0, 255),
@@ -61,8 +61,11 @@ export default async function handler(req, res) {
 
     const supabase = getClient();
 
-    // Replace snapshot (wipe → insert fresh)
-    const delProjects = await supabase.from("projects").delete();
+    // Safely delete everything (Supabase requires WHERE)
+    const delProjects = await supabase
+      .from("projects")
+      .delete()
+      .gte("id", "00000000-0000-0000-0000-000000000000");
     if (delProjects.error) {
       console.error("Supabase delete projects error:", delProjects.error);
       return res.status(500).json({
@@ -71,7 +74,10 @@ export default async function handler(req, res) {
       });
     }
 
-    const delGroups = await supabase.from("groups").delete();
+    const delGroups = await supabase
+      .from("groups")
+      .delete()
+      .gte("id", "00000000-0000-0000-0000-000000000000");
     if (delGroups.error) {
       console.error("Supabase delete groups error:", delGroups.error);
       return res.status(500).json({
@@ -98,7 +104,7 @@ export default async function handler(req, res) {
       insertedGroups = gi.data || [];
     }
 
-    // Map old group ids if client didn’t send them
+    // Fix projects with missing group_id
     const haveClientGroupIds = gRecords.every((gr) => !!gr.id);
     if (!haveClientGroupIds && insertedGroups.length > 0) {
       const firstGroupId = insertedGroups[0]?.id || null;
