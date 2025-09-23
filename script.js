@@ -52,12 +52,10 @@ async function loadState() {
     projects = Array.isArray(data.projects) ? data.projects : [];
   } catch (err) {
     console.error("Load failed:", err);
-    // Fallback view only (no persistence)
     if (groups.length === 0) {
       groups = [
-        { id: uuid(), name: "Throttle", position: 0 },
-        { id: uuid(), name: "Neutral", position: 1 },
-        { id: uuid(), name: "Send It", position: 2 }
+        { id: uuid(), name: "Lane A", position: 0 },
+        { id: uuid(), name: "Lane B", position: 1 }
       ];
     }
   }
@@ -69,17 +67,18 @@ async function saveState() {
       groups,
       projects: projects.map(p => ({
         ...p,
-        // ensure valid linkage
         groupId: groups.find(g => g.id === p.groupId)?.id || (groups[0]?.id ?? null),
         completed: Number.isFinite(p.completed) ? p.completed : 0,
         subtasks: Array.isArray(p.subtasks) ? p.subtasks : []
       }))
     };
+
     const res = await fetch("/api/savePlanner", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload)   // 👈 sends groups + projects properly
     });
+
     if (!res.ok) {
       console.error("Save failed:", await res.json());
     } else {
@@ -133,7 +132,6 @@ async function onGenerateSubtasks() {
   generateSubtasksBtn.disabled = true;
   generateSubtasksBtn.textContent = "Generating…";
   try {
-    // Placeholder suggestions (keep behavior like prior versions)
     pendingSubtasks = Array.from({ length: 5 }).map((_, i) => ({
       id: uuid(),
       text: `Suggested task ${i + 1}`
@@ -170,8 +168,7 @@ function toggleSelectAll() {
 
 /* ---- Helpers ---- */
 function pickProject() {
-  // For now, use the first project; expand later with a proper selector
-  return projects[0];
+  return projects[0]; // just grab the first project for now
 }
 
 function renderPendingSubtasks() {
@@ -195,7 +192,6 @@ function render() {
   if (!lanesEl) return;
   lanesEl.innerHTML = "";
 
-  // Sort lanes by position
   const sortedGroups = [...groups].sort((a,b) => (a.position ?? 0) - (b.position ?? 0));
 
   sortedGroups.forEach(g => {
@@ -228,7 +224,6 @@ function escapeHtml(str) {
 
 function uuid() {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-  // RFC4122-ish fallback
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0, v = c === "x" ? r : (r & 0x3 | 0x8);
     return v.toString(16);
