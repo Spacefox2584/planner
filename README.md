@@ -1,10 +1,9 @@
-# Master Suite — Suite Shell v1
+# FAFtools v2.5
 
-The **Master Suite** is a browser-based collection of tools (Planner, Listings, Scraper, etc.) built in **vanilla HTML/CSS/JS**, deployed on **Vercel**, and managed via **GitHub**.
+Milestone v2.5
 
-This repo contains **Suite Shell v1**, the top-level container that holds all tools.
+- ✅ Projects persist via Supabase
+- ❌ Subtasks not persisted
+- ❌ Delete projects not persisted
 
----
-
-## 📂 Project Structure
-
+This was the last known stable working baseline.

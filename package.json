@@ -1,11 +1,9 @@
 {
-  "name": "master-suite",
-  "version": "1.0.0",
+  "name": "faftools",
+  "version": "2.5.0",
   "type": "module",
   "private": true,
   "dependencies": {
-    "openai": "^4.0.0",
-    "@vercel/kv": "^0.2.4",
     "sortablejs": "^1.15.0",
     "@supabase/supabase-js": "^2.44.4"
   }
