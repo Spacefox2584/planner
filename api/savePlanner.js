@@ -1,9 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  "https://qbfppzfxwgklsvjogyzy.supabase.co",   // <-- your Project URL
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZnBwemZ4d2drbHN2am9neXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDQyNDUsImV4cCI6MjA3NDEyMDI0NX0.PIiVc0ZPLKS2bvNmWTXynfdey30KhqPUTDkXYMp1qRs"                       // <-- your anon key
-);
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+function getClient() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error("Missing Supabase credentials");
+  }
+  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false } });
+}
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
@@ -11,38 +16,42 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { projects } = req.body;
-
-    console.log("Incoming projects payload:", projects); // 🔎 DEBUG
-
-    if (!projects || !Array.isArray(projects)) {
-      return res.status(400).json({ error: "Missing projects array" });
+    const { groups, projects } = req.body || {};
+    if (!Array.isArray(groups) || !Array.isArray(projects)) {
+      return res.status(400).json({ error: "Invalid payload" });
     }
 
-    // Map into DB format
-    const mapped = projects.map(p => ({
-      group_id: String(p.groupId || ""),
-      name: p.name,
-      completed: p.completed ?? 0
-    }));
+    const supabase = getClient();
 
-    console.log("Mapped projects for Supabase insert:", mapped); // 🔎 DEBUG
-
-    // Clear old data
-    await supabase.from("projects").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-
-    // Insert new data
-    const { error } = await supabase.from("projects").insert(mapped);
-    if (error) {
-      console.error("Supabase insert error:", error); // 🔎 DEBUG
-      throw error;
+    // Safe delete all
+    const delProjects = await supabase.from("projects").delete().gte("id", "00000000-0000-0000-0000-000000000000");
+    if (delProjects.error) {
+      return res.status(500).json({ error: "Delete projects failed", details: delProjects.error.message });
     }
 
-    console.log("Supabase insert success"); // 🔎 DEBUG
+    const delGroups = await supabase.from("groups").delete().gte("id", "00000000-0000-0000-0000-000000000000");
+    if (delGroups.error) {
+      return res.status(500).json({ error: "Delete groups failed", details: delGroups.error.message });
+    }
 
-    return res.status(200).json({ success: true });
+    // Insert groups
+    const gi = await supabase.from("groups").insert(groups).select("*");
+    if (gi.error) {
+      return res.status(500).json({ error: "Insert groups failed", details: gi.error.message });
+    }
+
+    // Insert projects
+    const pi = await supabase.from("projects").insert(projects).select("*");
+    if (pi.error) {
+      return res.status(500).json({ error: "Insert projects failed", details: pi.error.message });
+    }
+
+    return res.status(200).json({
+      success: true,
+      groupsInserted: gi.data?.length || 0,
+      projectsInserted: pi.data?.length || 0,
+    });
   } catch (err) {
-    console.error("Save error:", err);
-    return res.status(500).json({ error: "Failed to save planner data" });
+    return res.status(500).json({ error: "Failed to save planner data", details: err.message });
   }
 }
