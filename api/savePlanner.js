@@ -61,7 +61,7 @@ export default async function handler(req, res) {
 
     const supabase = getClient();
 
-    // Safely delete everything (Supabase requires WHERE)
+    // Supabase requires a filter for delete: use "gte" with minimal UUID to match all rows
     const delProjects = await supabase
       .from("projects")
       .delete()
@@ -104,7 +104,7 @@ export default async function handler(req, res) {
       insertedGroups = gi.data || [];
     }
 
-    // Fix projects with missing group_id
+    // Fix projects with missing group_id (default them to the first group)
     const haveClientGroupIds = gRecords.every((gr) => !!gr.id);
     if (!haveClientGroupIds && insertedGroups.length > 0) {
       const firstGroupId = insertedGroups[0]?.id || null;
