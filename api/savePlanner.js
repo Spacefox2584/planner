@@ -1,12 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
-// ✅ Supabase connection (hardcoded for now)
 const supabase = createClient(
-  "https://qbfppzfxwgklsvjogyzy.supabase.co",   // <-- your Project URL
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZnBwemZ4d2drbHN2am9neXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDQyNDUsImV4cCI6MjA3NDEyMDI0NX0.PIiVc0ZPLKS2bvNmWTXynfdey30KhqPUTDkXYMp1qRs" // <-- your anon key
+  "https://qbfppzfxwgklsvjogyzy.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFiZnBwemZ4d2drbHN2am9neXp5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg1NDQyNDUsImV4cCI6MjA3NDEyMDI0NX0.PIiVc0ZPLKS2bvNmWTXynfdey30KhqPUTDkXYMp1qRs"
 );
 
-// ✅ Helper: generate UUIDv4
+// UUID generator
 function generateUUID() {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => {
     const r = (Math.random() * 16) | 0;
@@ -21,37 +20,54 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { projects } = req.body;
+    const { groups = [], projects = [] } = req.body;
 
-    console.log("Incoming projects payload:", projects); // 🔎 DEBUG
+    console.log("Incoming groups payload:", groups);
+    console.log("Incoming projects payload:", projects);
 
-    if (!projects || !Array.isArray(projects)) {
-      return res.status(400).json({ error: "Missing projects array" });
-    }
-
-    // Map into DB format with UUID group_ids
-    const mapped = projects.map(p => ({
-      group_id: p.groupId && typeof p.groupId === "string" && p.groupId.match(/^[0-9a-fA-F-]{36}$/)
-        ? p.groupId // already a uuid
-        : generateUUID(), // generate new uuid if it's a number
-      name: p.name,
-      completed: p.completed ?? 0
+    // ---- Map groups to UUIDs ----
+    const mappedGroups = groups.map(g => ({
+      id: g.id && typeof g.id === "string" && g.id.match(/^[0-9a-fA-F-]{36}$/)
+        ? g.id
+        : generateUUID(),
+      name: g.name
     }));
 
-    console.log("Mapped projects for Supabase insert:", mapped); // 🔎 DEBUG
+    // Create a lookup so projects can find the correct group UUID
+    const groupIdMap = {};
+    groups.forEach((g, idx) => {
+      groupIdMap[g.id] = mappedGroups[idx].id;
+    });
 
-    // Clear old data
+    // ---- Map projects ----
+    const mappedProjects = projects.map(p => ({
+      name: p.name,
+      completed: p.completed ?? 0,
+      group_id: groupIdMap[p.groupId] || generateUUID(), // safe fallback
+    }));
+
+    console.log("Mapped groups for Supabase insert:", mappedGroups);
+    console.log("Mapped projects for Supabase insert:", mappedProjects);
+
+    // ---- Clear old data ----
     await supabase.from("projects").delete().neq("id", "00000000-0000-0000-0000-000000000000");
+    await supabase.from("groups").delete().neq("id", "00000000-0000-0000-0000-000000000000");
 
-    // Insert new data
-    const { error } = await supabase.from("projects").insert(mapped);
-    if (error) {
-      console.error("Supabase insert error:", error); // 🔎 DEBUG
-      throw error;
+    // ---- Insert groups ----
+    let { error: groupErr } = await supabase.from("groups").insert(mappedGroups);
+    if (groupErr) {
+      console.error("Supabase group insert error:", groupErr);
+      throw groupErr;
     }
 
-    console.log("Supabase insert success"); // 🔎 DEBUG
+    // ---- Insert projects ----
+    let { error: projErr } = await supabase.from("projects").insert(mappedProjects);
+    if (projErr) {
+      console.error("Supabase project insert error:", projErr);
+      throw projErr;
+    }
 
+    console.log("Supabase save success ✅");
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error("Save error:", err);
