@@ -1,89 +1,30 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Master Suite — Suite Shell v2.2</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>FAFtools Planner v2.9</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="planner">
+      <header class="topbar">
+        <h1>Planner</h1>
+        <label class="theme-toggle">
+          <input id="themeToggle" type="checkbox" checked />
+          <span>Dark mode</span>
+        </label>
+      </header>
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="style.css" />
+      <div id="controls" class="controls">
+        <button id="addGroup" class="btn">+ Add Heading</button>
+        <button id="addProject" class="btn">+ Add Project</button>
+      </div>
 
-  <!-- SortableJS (Planner drag & drop) -->
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-</head>
-<body data-theme="light">
-  <!-- Top Nav -->
-  <header class="suite-nav">
-    <div class="suite-brand">
-      <span class="suite-dot"></span>
-      <strong>Master Suite</strong>
-      <span class="suite-sub">Shell v2.2</span>
+      <!-- Lanes render here -->
+      <div id="lanes" class="lanes"></div>
     </div>
-    <nav class="suite-buttons" role="tablist" aria-label="Tool switcher">
-      <button class="suite-btn is-active" data-tool="planner" onclick="showTool('planner', this)">Planner (X01)</button>
-      <button class="suite-btn" data-tool="listings" onclick="showTool('listings', this)">Listings (X02)</button>
-      <button class="suite-btn" data-tool="scraper" onclick="showTool('scraper', this)">Scraper (X03)</button>
-      <!-- Theme Toggle -->
-      <button class="suite-btn theme-toggle" onclick="toggleTheme()">🌙 / ☀️</button>
-    </nav>
-  </header>
 
-  <!-- Content Area -->
-  <main class="suite-content">
-    <!-- TOOL: Planner (X01 v2.1) -->
-    <section id="tool-planner" class="tool-pane" role="tabpanel" aria-labelledby="tab-planner">
-      <h1>Planner v2.1</h1>
-
-      <div id="lanes">
-        <button id="addGroup">+ Add Heading</button>
-        <button id="addProject">+ Add Project</button>
-      </div>
-
-      <div id="whiteboard"></div>
-
-      <!-- Project Modal -->
-      <div id="modal" class="hidden" aria-hidden="true">
-        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-          <div class="modal-header">
-            <div class="modal-title" id="modalTitle">Project</div>
-            <button id="closeModal" aria-label="Close project dialog">Close</button>
-          </div>
-
-          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-            <button id="addSubtask">+ Add Subtask</button>
-            <button id="generateSubtasks">✨ Generate Example Subtasks</button>
-          </div>
-
-          <div id="approvalControls" class="hidden">
-            <button id="approveBtn">✅ Approve Selected</button>
-            <button id="cancelBtn">❌ Cancel</button>
-            <button id="selectAllBtn">☑ Select All</button>
-          </div>
-
-          <div id="subtasks"></div>
-          <div id="subtaskCounter" class="counter"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- TOOL: Listings (X02 placeholder) -->
-    <section id="tool-listings" class="tool-pane hidden" role="tabpanel" aria-labelledby="tab-listings">
-      <div class="placeholder">
-        <h2>Listings (X02)</h2>
-        <p>Coming soon. This pane will host your Listings tool.</p>
-      </div>
-    </section>
-
-    <!-- TOOL: Scraper (X03 placeholder) -->
-    <section id="tool-scraper" class="tool-pane hidden" role="tabpanel" aria-labelledby="tab-scraper">
-      <div class="placeholder">
-        <h2>Scraper (X03)</h2>
-        <p>Coming soon. Lightweight, browser-only to start; serverless `/api` as needed.</p>
-      </div>
-    </section>
-  </main>
-
-  <!-- Shell + Planner logic -->
-  <script src="script.js"></script>
-</body>
+    <script src="/script.js"></script>
+  </body>
 </html>
